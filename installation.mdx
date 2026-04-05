@@ -1,0 +1,178 @@
+---
+title: "Installation"
+description: "Three ways to install OCA Web Addons into your Odoo 18.0 instance: pip, OCA Runboat, or source."
+---
+
+## Prerequisites
+
+- **Odoo 18.0** (Community Edition). These addons are not tested against older branches.
+- Python 3 (the version shipped with Odoo 18.0).
+- Access to the server's filesystem or a Python virtual environment.
+
+<Warning>
+  Some addons (for example `web_dark_mode` and `web_responsive`) declare `"excludes": ["web_enterprise"]` in their manifest. Do not install them alongside Odoo Enterprise modules.
+</Warning>
+
+---
+
+## Method 1: pip install (recommended)
+
+The entire collection is published to PyPI as the `odoo-addons-oca-web` meta-package. This is the fastest way to add all addons to your environment at once.
+
+<Steps>
+  <Step title="Activate your virtual environment">
+    ```bash
+    source /path/to/your/odoo-venv/bin/activate
+    ```
+  </Step>
+  <Step title="Install the meta-package">
+    ```bash
+    pip install odoo-addons-oca-web==18.0.*
+    ```
+
+    This installs every addon in the repository. To install a single addon instead:
+
+    ```bash
+    pip install odoo-addon-web_notify==18.0.*
+    ```
+  </Step>
+  <Step title="Install Python dependencies">
+    Several addons require third-party Python libraries. Install them from the repository's `requirements.txt`:
+
+    ```bash
+    pip install beautifulsoup4 "bokeh==3.6.3" "mpld3==0.5.10"
+    ```
+
+    You only need these packages if you install the corresponding addons (`web_widget_bokeh_chart` needs `bokeh`, `web_widget_mpld3_chart` needs `mpld3`).
+  </Step>
+  <Step title="Add the addons to your Odoo configuration">
+    Pip-installed OCA addons are automatically placed on Python's path. Add the addon directory to `addons_path` in your `odoo.conf`:
+
+    ```ini
+    [options]
+    addons_path = /path/to/odoo/addons,/path/to/your/venv/lib/python3.x/site-packages/odoo/addons
+    ```
+
+    <Tip>Run `python -c "import odoo; print(odoo.__file__)"` to find the path of your installed Odoo package.</Tip>
+  </Step>
+  <Step title="Activate the module in Odoo">
+    1. Log in to Odoo as an administrator.
+    2. Navigate to **Settings → Apps**.
+    3. Enable **Developer Mode** (Settings → General Settings → Developer Tools).
+    4. Click **Update Apps List**.
+    5. Search for the addon by its technical name (e.g., `web_notify`) or display name (e.g., `Web Notify`).
+    6. Click **Install**.
+  </Step>
+</Steps>
+
+---
+
+## Method 2: OCA Runboat (no installation needed)
+
+Runboat is OCA's hosted testing environment. Use it to try any addon against a live Odoo 18.0 instance without installing anything locally.
+
+<Steps>
+  <Step title="Open Runboat">
+    Go to [runboat.odoo-community.org](https://runboat.odoo-community.org/builds?repo=OCA/web&target_branch=18.0) and filter by **repo: OCA/web** and **branch: 18.0**.
+  </Step>
+  <Step title="Start a build">
+    Click **Start** next to a recent build. Runboat provisions a temporary Odoo instance with the full addon set pre-installed.
+  </Step>
+  <Step title="Log in and explore">
+    Use the credentials shown on the build page. Activate any addon you want to test from **Settings → Apps**.
+
+    <Note>
+      Runboat instances are ephemeral. Do not store important data in them — they are reset periodically.
+    </Note>
+  </Step>
+</Steps>
+
+---
+
+## Method 3: Install from source
+
+Use this method when you need to modify addon code, run tests locally, or work on a contribution.
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone --branch 18.0 https://github.com/OCA/web.git /opt/oca/web
+    ```
+  </Step>
+  <Step title="Install Python dependencies">
+    ```bash
+    cd /opt/oca/web
+    pip install -r requirements.txt
+    pip install -r test-requirements.txt   # needed only for running tests
+    ```
+
+    `requirements.txt` contains:
+
+    ```text
+    beautifulsoup4
+    bokeh==3.6.3
+    mpld3==0.5.10
+    ```
+
+    `test-requirements.txt` adds:
+
+    ```text
+    odoo_test_helper
+    ```
+  </Step>
+  <Step title="Add the source directory to addons_path">
+    ```ini
+    [options]
+    addons_path = /path/to/odoo/addons,/opt/oca/web
+    ```
+
+    Restart Odoo after changing `odoo.conf`.
+  </Step>
+  <Step title="Update the apps list and install">
+    1. Navigate to **Settings → Apps** with developer mode enabled.
+    2. Click **Update Apps List**.
+    3. Search for and install the addon you need.
+  </Step>
+  <Step title="(Optional) Install pre-commit hooks">
+    If you plan to contribute changes back, set up the pre-commit hooks so your commits pass CI automatically:
+
+    ```bash
+    pip install pre-commit
+    pre-commit install
+    ```
+
+    See the [Contributing](/contributing) page for details on what the hooks check.
+  </Step>
+</Steps>
+
+---
+
+## Odoo 18.0 compatibility
+
+All addons in this repository are versioned with the scheme `18.0.X.Y.Z`:
+
+| Version segment | Meaning |
+|---|---|
+| `18.0` | Odoo series compatibility |
+| `X` | Breaking change |
+| `Y` | New feature |
+| `Z` | Bug fix |
+
+<Info>
+  The meta-package version (`odoo-addons-oca-web==18.0.20260224.0`) encodes the date of the last release. Pin to `18.0.*` to receive all compatible updates automatically.
+</Info>
+
+---
+
+## Verifying the installation
+
+After installing an addon you can confirm it is active by checking the module's state in the Odoo shell:
+
+```bash
+odoo shell -d your_database
+```
+
+```python
+env['ir.module.module'].search([('name', '=', 'web_notify')]).mapped('state')
+# Expected output: ['installed']
+```

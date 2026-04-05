@@ -1,0 +1,115 @@
+---
+title: 'Web Widget Dropdown Dynamic'
+description: 'A field widget that fetches its list of options from a Python model method at runtime, enabling context-dependent selection values.'
+---
+
+The `web_widget_dropdown_dynamic` addon provides the `dynamic_dropdown` widget. Unlike a standard `fields.Selection` whose options are fixed at definition time, this widget calls a Python model method on the server every time the relevant context changes and builds the drop-down from the returned list. It supports `fields.Char`, `fields.Integer`, and `fields.Selection` as the backing field type.
+
+<Note>
+  This widget is intended to **filter or reshape** a set of options dynamically, not to replace `fields.Selection` entirely. For a fully arbitrary set of string values with no fixed type constraint, use `fields.Char` as the backing field.
+</Note>
+
+## Installation
+
+```python
+"depends": ["web", "web_widget_dropdown_dynamic"],
+```
+
+## How it works
+
+1. The view passes a `context` dict to the widget via the standard `context` attribute on the field.
+2. When the context changes (because a sibling field's value changed), the widget calls the Python method specified in `options.values` via an ORM `call` RPC.
+3. The method returns a list of `(value, label)` tuples.
+4. The widget rebuilds the drop-down with those options and clears the field value if the current value is no longer in the list.
+
+## Defining the Python method
+
+The method must be defined as a model method (decorated with `@api.model`) and must return a list of `(value, label)` tuples:
+
+```python
+from odoo import api, fields, models
+
+class MyModel(models.Model):
+    _name = "my.model"
+
+    user_id = fields.Many2one("res.users", string="User")
+    priority = fields.Char(string="Priority")
+
+    @api.model
+    def get_priority_options(self):
+        values = [("low", "Low")]
+        if self.env.context.get("is_admin"):
+            values += [
+                ("medium", "Medium"),
+                ("high", "High"),
+            ]
+        return values
+```
+
+The context passed to the method is the union of the record's context and the `context` attribute set on the field in the view.
+
+## View declaration
+
+```xml
+<field name="user_id" />
+<field
+    name="priority"
+    widget="dynamic_dropdown"
+    options="{'values': 'get_priority_options'}"
+    context="{'is_admin': user_id}"
+/>
+```
+
+When `user_id` changes, the widget re-fetches the options automatically because the `context` expression re-evaluates.
+
+## Complete example: integer field with user-dependent options
+
+This mirrors the addon's built-in demo, which adds a **Dropdown Integer** field to `ir.filters`:
+
+```python
+# On ir.filters (via demo data)
+@api.model
+def dynamic_dropdown_int_method_demo(self):
+    """Return option One always; add option Two only for Mitchell Admin."""
+    values = [("1", "One")]
+    if self.env.user.name == "Mitchell Admin":
+        values.append(("2", "Two"))
+    return values
+```
+
+```xml
+<field name="user_id" />
+<field
+    name="x_dynamic_dropdown_int"
+    widget="dynamic_dropdown"
+    options="{'values': 'dynamic_dropdown_int_method_demo'}"
+    context="{'depending_on': user_id}"
+/>
+```
+
+You can test this by going to **Settings → Filters** and observing how the integer dropdown changes based on the selected user.
+
+## Supported field types
+
+| Field type | Behavior |
+|---|---|
+| `fields.Char` | Value stored as string. Widget renders a `<select>` element. |
+| `fields.Integer` | Value stored as integer. Widget coerces the string selection to `Number`. |
+| `fields.Selection` | Options from the method replace or filter the field's static selection list. |
+
+## Widget props reference
+
+The widget reads the following from the field definition:
+
+| Source | Key | Description |
+|---|---|---|
+| `options` | `values` | **Required.** Name of the model method to call. |
+| `context` | any keys | Passed as context to the server method. Re-fetches when any referenced field changes. |
+
+## Caching behavior
+
+Results are cached in `record.model.specialDataCaches` keyed by `__reference__{field_name}-{context.depending_on}`. The cache is scoped to the current model session; navigating away and back will refetch from the server.
+
+<Tip>
+  If your option list depends on multiple context values, include all of them in the `context` attribute. The cache key includes only `depending_on` by default, so design your method to read whatever it needs from `self.env.context`.
+</Tip>

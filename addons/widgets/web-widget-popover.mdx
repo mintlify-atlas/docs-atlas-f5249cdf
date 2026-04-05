@@ -1,0 +1,157 @@
+---
+title: 'Web Widget Popover'
+description: 'Display a Char or Text field as a FontAwesome icon that shows the field content as a tooltip popover on hover.'
+---
+
+The `web_widget_popover` addon provides the `popover` widget for `Char` and `Text` fields. Instead of rendering the field value as visible text, the widget displays a FontAwesome icon. Hovering over the icon shows the field content in a tooltip popover. This is useful for supplementary information (warnings, notes, hints) that should not take up form space when empty.
+
+## Installation
+
+```python
+"depends": ["web", "web_widget_popover"],
+```
+
+## Basic usage
+
+```xml
+<field
+    name="warning_message"
+    widget="popover"
+    icon="fa-warning"
+    class="text-danger"
+    nolabel="1"
+/>
+```
+
+When `warning_message` is empty, no icon is rendered. When it has a value, the configured icon appears and hovering reveals the text in a tooltip.
+
+## Attributes
+
+| Attribute | Type | Default | Description |
+|---|---|---|---|
+| `icon` | string | `fa-info-circle` | FontAwesome icon class (without the `fa ` prefix). The `fa` base class is added automatically. |
+| `class` | string | — | Additional CSS classes applied to the icon `<span>`. Use Bootstrap color utilities such as `text-danger`, `text-warning`, `text-success`. |
+| `nolabel` | `"1"` | — | Standard Odoo attribute. Pass `nolabel="1"` to hide the field label — recommended for icon-only display. |
+
+## Supported field types
+
+| Field type | Support |
+|---|---|
+| `fields.Char` | Supported |
+| `fields.Text` | Supported (multi-line content rendered in popover with `white-space: pre-wrap`) |
+
+## Examples
+
+<Tabs>
+  <Tab title="Warning icon">
+
+```xml
+<field
+    name="warning_message"
+    widget="popover"
+    icon="fa-warning"
+    class="text-danger"
+    nolabel="1"
+/>
+```
+
+Shows a red warning triangle. Hovering displays the warning text.
+
+  </Tab>
+  <Tab title="Info icon (default)">
+
+```xml
+<field
+    name="internal_note"
+    widget="popover"
+    nolabel="1"
+/>
+```
+
+Uses the default `fa-info-circle` icon with no extra color class.
+
+  </Tab>
+  <Tab title="Custom icon and color">
+
+```xml
+<field
+    name="quality_comment"
+    widget="popover"
+    icon="fa-comment"
+    class="text-primary"
+    nolabel="1"
+/>
+```
+
+  </Tab>
+  <Tab title="In a list view">
+
+```xml
+<list>
+    <field name="name" />
+    <field name="state" />
+    <field
+        name="note"
+        widget="popover"
+        icon="fa-sticky-note"
+        class="text-warning"
+        nolabel="1"
+        optional="show"
+    />
+</list>
+```
+
+Using the widget in a list view column keeps rows compact while still surfacing notes on hover.
+
+  </Tab>
+</Tabs>
+
+## Typical placement in a form view
+
+The most common pattern places the popover widget inline next to a field label or at the edge of a header section:
+
+```xml
+<div class="o_row">
+    <label for="amount_total" string="Total" />
+    <field name="amount_total" />
+    <field
+        name="amount_warning"
+        widget="popover"
+        icon="fa-exclamation-triangle"
+        class="text-warning"
+        nolabel="1"
+    />
+</div>
+```
+
+## How the popover is rendered
+
+The widget uses Odoo's built-in tooltip system (`data-tooltip-info` / `data-tooltip-template`). The popover template renders the field value inside a `<div>` with `white-space: pre-wrap`, preserving newlines in multi-line text fields.
+
+The icon is rendered as:
+
+```html
+<span class="fa fa-warning text-danger"
+      data-tooltip-info='{"message": "..."}'
+      data-tooltip-template="web_widget_popover.PopoverTemplate" />
+```
+
+When the field value is falsy (empty string, `False`), the `<span>` is not rendered at all, so empty fields take up no space in the view.
+
+<Tip>
+  Pair this widget with a computed field that aggregates multiple warning conditions into a single message string, so you can show a single icon that summarizes all issues for a record.
+</Tip>
+
+## FontAwesome icon reference
+
+The icon value must be a valid FontAwesome 4 class name (without the `fa ` prefix). Common values:
+
+| Value | Icon |
+|---|---|
+| `fa-info-circle` | Information (default) |
+| `fa-warning` | Warning triangle |
+| `fa-exclamation-triangle` | Exclamation triangle |
+| `fa-comment` | Comment bubble |
+| `fa-sticky-note` | Sticky note |
+| `fa-question-circle` | Question mark |
+| `fa-check-circle` | Check mark |

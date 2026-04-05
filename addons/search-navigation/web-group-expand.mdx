@@ -1,0 +1,106 @@
+---
+title: 'Group expand buttons'
+description: 'Add expand-all and collapse-all buttons to grouped list views in Odoo, with layer-by-layer traversal for nested groups.'
+---
+
+The `web_group_expand` addon adds two icon buttons — **expand all** (fa-expand) and **collapse all** (fa-compress) — to the button bar of any grouped list view. The buttons only appear when the list is actively grouped by a field, replacing the pagination area.
+
+<Note>
+Expand and collapse operate **one level at a time**. When groups are nested (e.g. grouped by Stage, then by Salesperson), the first click on "expand all" opens the outermost collapsed level, and subsequent clicks open the next level down. This prevents accidentally loading thousands of records in deeply-nested views.
+</Note>
+
+## Using the buttons
+
+<Steps>
+  <Step title="Apply a group-by in a list view">
+    Open any model in list view. Use the **Group By** dropdown in the search bar to group records by a field (e.g. Stage, Responsible, Month).
+
+    The expand (arrows-out) and collapse (arrows-in) buttons appear in the top-right of the list, next to the **New** button.
+  </Step>
+  <Step title="Expand all groups">
+    Click the **expand** button (fa-expand icon).
+
+    - The addon finds the topmost layer that still has at least one collapsed group.
+    - It sets all groups in that layer to `isFolded = false` and reloads.
+    - Click again to expand the next nested layer, if any.
+  </Step>
+  <Step title="Collapse all groups">
+    Click the **collapse** button (fa-compress icon).
+
+    - The addon walks down to the deepest layer that has at least one expanded group.
+    - It sets all groups in that layer to `isFolded = true` and reloads.
+    - Click again to collapse the next outer layer, if any.
+  </Step>
+</Steps>
+
+## Layer-by-layer logic explained
+
+Rather than toggling every group at all depths in a single operation, the addon finds the **highest non-fully-expanded layer** (for expand) or the **deepest non-fully-collapsed layer** (for collapse) and acts only on that layer:
+
+```javascript
+// Expand: find the topmost layer with any folded group
+async expandAllGroups() {
+    let layer = this.model.root.groups;
+    while (layer.length) {
+        const closed = layer.filter(g => g._config.isFolded);
+        if (closed.length) {
+            // expand this layer and stop
+            await layer.forEach(g => { g._config.isFolded = false; });
+            break;
+        }
+        // layer fully open — descend
+        layer = flatten(layer.map(g => g.list.groups || []));
+    }
+    await this.model.root.load();
+}
+
+// Collapse: find the deepest layer with any open group
+async collapseAllGroups() {
+    let layer = this.model.root.groups;
+    while (layer.length) {
+        const next = flatten(layer.map(g => g.list.groups || []))
+                         .filter(g => !g._config.isFolded);
+        if (!next.length) {
+            // nothing open below — collapse this layer
+            await layer.forEach(g => { g._config.isFolded = true; });
+            break;
+        }
+        layer = next;
+    }
+    await this.model.root.load();
+}
+```
+
+After toggling `isFolded`, the model's `MAX_NUMBER_OPENED_GROUPS` limit is temporarily raised to match the layer width so that all groups in the targeted layer are loaded in a single request, then restored to its default value.
+
+## Button rendering
+
+The buttons are injected inside the existing `o_list_buttons` div, and are only rendered when the list is grouped (`model.root.isGrouped`):
+
+```xml
+<xpath expr="//div[hasclass('o_list_buttons')]" position="inside">
+    <t t-if="model.root.isGrouped">
+        <button
+            type="button"
+            class="btn btn-secondary fa fa-expand oe_group_by_expand"
+            data-tooltip="Expand"
+            t-on-click="expandAllGroups"
+        />
+        <button
+            type="button"
+            class="btn btn-secondary fa fa-compress oe_group_by_collapse"
+            data-tooltip="Compress"
+            t-on-click="collapseAllGroups"
+        />
+    </t>
+</xpath>
+```
+
+## Installation
+
+```python
+# __manifest__.py
+"depends": ["web"],
+```
+
+No configuration is required. The buttons appear automatically whenever a list view is grouped.

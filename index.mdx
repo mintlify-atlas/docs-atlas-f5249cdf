@@ -1,97 +1,58 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "OCA Web Addons"
+description: "Community-maintained Odoo web client UI addons that extend and enhance the Odoo backend with responsive design, custom widgets, notifications, and productivity features."
 ---
 
-## Setting up
+The **OCA Web Addons** repository is maintained by the [Odoo Community Association](https://odoo-community.org/) and provides over 60 installable Odoo modules that improve the day-to-day experience of Odoo users and developers. Each addon is independent — install only what you need.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Learn how to install OCA web addons into your Odoo instance
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="UI & Theming" icon="palette" href="/addons/ui-theming/web-responsive">
+    Responsive layout, dark mode, classic theme, and branding tools
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Widgets & Forms" icon="puzzle-piece" href="/addons/widgets/web-timeline">
+    Timeline view, matrix fields, computed pivots, and more
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="Notifications" icon="bell" href="/addons/notifications/web-notify">
+    Real-time push notifications and session management
   </Card>
-</Columns>
+  <Card title="Search & Navigation" icon="magnifying-glass" href="/addons/search-navigation/web-search-with-and">
+    AND search, alphabetic menus, filter buttons, and group controls
+  </Card>
+  <Card title="List & Tree Views" icon="table" href="/addons/list-tree/web-tree-dynamic-colored-field">
+    Dynamic coloring, clickable many2one, persistent column widths
+  </Card>
+</CardGroup>
 
-## Create beautiful pages
+## What's included
 
-Everything you need to create world-class documentation.
+OCA Web Addons covers six main areas of the Odoo web interface:
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+<Steps>
+  <Step title="Choose your addons">
+    Browse the addon groups above to find the features you need. Each addon is independent and installable on its own.
+  </Step>
+  <Step title="Install via pip or source">
+    Install addons from PyPI using `pip install odoo-addon-<name>` or clone the repository and add it to your Odoo addons path.
+  </Step>
+  <Step title="Activate in Odoo">
+    Go to **Settings → Apps**, search for the addon by name, and click **Install**. Most addons activate immediately with no additional configuration.
+  </Step>
+  <Step title="Configure as needed">
+    Some addons — like `web_environment_ribbon`, `web_favicon`, and `web_session_auto_close` — have optional system parameter configuration documented in their respective pages.
+  </Step>
+</Steps>
 
-## Need inspiration?
+## Compatibility
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Note>
+  All addons in this documentation target **Odoo 18.0**. Earlier versions (16.0, 17.0) are maintained on separate branches in the [GitHub repository](https://github.com/OCA/web).
+</Note>
+
+All addons are licensed under [AGPL-3.0](https://github.com/OCA/web/blob/18.0/LICENSE) or [LGPL-3.0](https://github.com/OCA/web/blob/18.0/LICENSE) — check each addon's `__manifest__.py` for the specific license.
+
+## Contributing
+
+OCA Web Addons is a community project. Contributions, bug reports, and feature requests are welcome on [GitHub](https://github.com/OCA/web). See the [Contributing guide](/contributing) for details.

@@ -1,24 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "OCA Web Addons",
+  "projectType": "frontend",
+  "projectName": "OCA Web Addons",
+  "projectDescription": "A collection of community-maintained Odoo web client UI addons that extend and enhance the Odoo backend interface with responsive design, custom widgets, notifications, theming, and productivity features.",
   "theme": "almond",
-  "colors": {
-    "primary": "#c37785",
-    "light": "#171c45",
-    "dark": "#737bb0"
-  },
-  "favicon": "https://media.brand.dev/c913fe6e-bc38-46d5-b183-5efe287678d7.jpg",
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/OCA/web"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/OCA/web"
-    }
-  },
+  "primaryColor": "#c37785",
+  "lightColor": "#171c45",
+  "darkColor": "#737bb0",
   "navigation": {
     "tabs": [
       {
@@ -90,5 +77,38 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Responsive web client with mobile and desktop enhancements",
+    "Dark mode support for the Odoo backend",
+    "Interactive timeline view for visualizing events over time",
+    "Real-time push notifications to users",
+    "Pivot view computed measures",
+    "2D matrix widget for x2many fields",
+    "Dynamic dropdown widget with backend-resolved options",
+    "Many2one/Many2many field options control (create, quick-create toggles)",
+    "Environment ribbon to mark non-production instances",
+    "Custom favicon and PWA configuration",
+    "Dynamic field coloring in tree views",
+    "Session auto-close on inactivity",
+    "AND-condition search support",
+    "Company color theming in navbar",
+    "Classic contrasted form theme for improved field visibility"
+  ],
+  "publicApiSurface": [
+    "web_notify: env.services.notification (send success/danger/warning/info messages)",
+    "web_timeline: <timeline> view type in XML arch definition",
+    "web_widget_x2many_2d_matrix: widget=\"x2many_2d_matrix\" field attribute",
+    "web_widget_dropdown_dynamic: widget=\"dropdown_dynamic\" field attribute",
+    "web_m2x_options: options=\"{'no_create': True, 'no_quick_create': True}\" on many2one fields",
+    "web_pivot_computed_measure: computed measure configuration in pivot views",
+    "web_widget_bokeh_chart: widget=\"bokeh_chart\" field attribute",
+    "web_widget_popover: widget=\"popover\" field attribute",
+    "web_widget_url_advanced: widget=\"url_advanced\" with custom label support",
+    "web_tree_dynamic_colored_field: options=\"{'bg_color': '...', 'fg_color': '...'}\" on tree fields",
+    "web_environment_ribbon: ir.config_parameter keys for ribbon text, color, and background",
+    "web_session_auto_close: configurable timeout via system parameters",
+    "web_favicon: res.company favicon field for custom shortcut icon",
+    "web_pwa_customize: PWA short name, background color, theme color, and icon configuration"
+  ]
 }

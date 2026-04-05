@@ -1,0 +1,87 @@
+---
+title: 'Keyboard column resize in tree views'
+description: 'Resize list view columns using keyboard shortcuts while in edit mode, without reaching for the mouse.'
+---
+
+This addon adds keyboard shortcuts that let you widen or narrow list view columns while a cell is focused in edit mode. It is designed for data-entry workflows where keeping your hands on the keyboard reduces friction when a column is too narrow to read its content clearly.
+
+## How it works
+
+The module patches `ListRenderer.onCellKeydownEditMode` to intercept `Shift+ArrowUp` and `Shift+ArrowDown` key combinations. When detected, it locates the `<th>` element for the focused column by its `data-name` attribute and adjusts its `style.width` by a fixed step of **20 pixels** per key press.
+
+Width changes are applied using `requestAnimationFrame` to avoid layout thrashing.
+
+<Warning>
+  Column width changes made with these keyboard shortcuts are **temporary**. They reset when you move focus out of the current row. For permanent width adjustments, drag the column separator with the mouse, or install [`web_remember_tree_column_width`](/addons/list-tree/web-remember-tree-column-width) to persist mouse-drag widths across sessions.
+</Warning>
+
+## Installation
+
+Install the `web_tree_column_keyboard_resize` module. It depends only on `web`.
+
+## Keyboard shortcuts
+
+Both shortcuts are active only when a cell in the list view is in **edit mode** (i.e., when a cell has keyboard focus after clicking into it or tabbing to it).
+
+<CardGroup cols={2}>
+  <Card title="Shift + Arrow Up" icon="arrow-up">
+    **Increase** the width of the focused column by 20 pixels per key press.
+  </Card>
+  <Card title="Shift + Arrow Down" icon="arrow-down">
+    **Decrease** the width of the focused column by 20 pixels per key press.
+  </Card>
+</CardGroup>
+
+## Usage
+
+<Steps>
+  <Step title="Open a list view in edit mode">
+    Navigate to any editable list view and click into a cell, or tab into one, to enter edit mode. The cell must be focused for the shortcuts to work.
+  </Step>
+  <Step title="Press Shift+ArrowUp to widen the column">
+    Hold `Shift` and press the `Up Arrow` key. The focused column grows by 20 pixels. Press repeatedly for larger adjustments.
+  </Step>
+  <Step title="Press Shift+ArrowDown to narrow the column">
+    Hold `Shift` and press the `Down Arrow` key. The focused column shrinks by 20 pixels. The width cannot go below the column's natural scroll width.
+  </Step>
+  <Step title="Continue editing">
+    After resizing, continue entering data normally. The modified width remains until you move focus away from the current row.
+  </Step>
+</Steps>
+
+## Behaviour details
+
+<AccordionGroup>
+  <Accordion title="Step size">
+    Each key press adjusts the column width by exactly **20 pixels** (`RESIZE_PIXEL_STEP = 20`). There is no way to change this value without modifying the source.
+  </Accordion>
+  <Accordion title="Minimum width">
+    When decreasing, the new width is calculated as `th.scrollWidth + delta`. Because `scrollWidth` reflects the element's minimum content width, the column cannot shrink below the size required to display its content.
+  </Accordion>
+  <Accordion title="When are widths reset?">
+    Width changes are scoped to the current row-editing session. As soon as focus leaves the row (e.g., you press `Enter`, `Escape`, or click elsewhere), Odoo re-renders the list and column widths return to their original values.
+  </Accordion>
+  <Accordion title="Does this conflict with Shift+Arrow navigation?">
+    Standard Odoo edit-mode navigation uses plain `ArrowUp` / `ArrowDown` (without `Shift`) to move between rows. The `Shift+` modifier is not used by Odoo's default shortcuts in this context, so there is no conflict. The module falls through to `super.onCellKeydownEditMode` for any hotkey it does not handle.
+  </Accordion>
+</AccordionGroup>
+
+## Combining with `web_remember_tree_column_width`
+
+You can install both this module and `web_remember_tree_column_width` together. The two modules serve different purposes:
+
+| Feature | `web_tree_column_keyboard_resize` | `web_remember_tree_column_width` |
+|---|---|---|
+| Resize method | Keyboard (`Shift+Arrow`) | Mouse drag |
+| Width persisted? | No — resets on row blur | Yes — stored in `localStorage` |
+| Use case | Temporary visibility during editing | Permanent layout preference |
+
+## Module details
+
+| Property | Value |
+|---|---|
+| Technical name | `web_tree_column_keyboard_resize` |
+| Version | 18.0.1.0.0 |
+| License | AGPL-3 |
+| Author | ForgeFlow, OCA |
+| Depends on | `web` |

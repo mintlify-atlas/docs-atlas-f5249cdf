@@ -1,0 +1,118 @@
+---
+title: 'Excel export respects group expand state'
+description: 'Export grouped list views to Excel with only the top-level group rows when all groups are collapsed, or with full row detail when any group is expanded.'
+---
+
+When exporting a grouped list view to Excel, standard Odoo always exports every record regardless of how the view is currently grouped or collapsed. This addon changes that behaviour: the exported file reflects the **current expand/collapse state** of groups in the UI. If all groups are collapsed, only the group summary rows are exported. If any group is expanded, all records are included.
+
+## How it works
+
+The module patches `ListController.downloadExport` on the frontend and extends the `/web/export/xlsx` route on the backend.
+
+**Frontend (`data_export.esm.js`):** Before calling the upstream export, the module inspects the DOM for the presence of `.o_data_row` elements (individual record rows) and `.o_group_header` elements (group header rows). If the view shows group headers but no data rows — meaning all groups are collapsed — it sets `collapse_groups: true` in the export context.
+
+**Backend (`controllers/excel_export.py`):** The custom `CustomGroupsTreeNode` controller reads `collapse_groups` from the export context. When `true`, it strips all child nodes and data rows from each top-level group in the tree before delegating to the standard `from_group_data` method, producing a summary-only export.
+
+<Info>
+  This addon only affects **Excel (XLSX) exports** triggered from the list view's export button. CSV exports and other export methods are unaffected.
+</Info>
+
+## Installation
+
+Install the `web_excel_export_dynamic_expand` module. It depends only on `web`.
+
+## Usage
+
+<Steps>
+  <Step title="Open a list view with grouping enabled">
+    Navigate to any list view and apply a Group By. For example, group Sales Orders by Salesperson, or Invoices by Customer.
+  </Step>
+  <Step title="Choose your expand state">
+    Decide what you want in the exported file:
+
+    - **Summary only:** leave all groups collapsed (click the collapse-all button or do not expand any group)
+    - **Full detail:** expand one or more groups to show individual records
+  </Step>
+  <Step title="Export to Excel">
+    Click the **Export** button (or use the Action menu → Export) and select XLSX format. The exported file reflects the current state of the view.
+  </Step>
+</Steps>
+
+## Export behaviour by expand state
+
+<Tabs>
+  <Tab title="All groups collapsed">
+    When no group is expanded, the DOM contains `.o_group_header` rows but no `.o_data_row` elements. The module sets `collapse_groups: true` and the backend strips record data from all groups.
+
+    The resulting Excel file contains **one row per group** with only the aggregated/summary values — equivalent to a pivot-style summary report.
+
+    ```
+    | Salesperson     | Total Amount |
+    |-----------------|--------------|
+    | Alice Martin    | 45,200.00    |
+    | Bob Johnson     | 31,800.00    |
+    | Carol Williams  | 28,500.00    |
+    ```
+  </Tab>
+  <Tab title="One or more groups expanded">
+    When at least one group is expanded, `.o_data_row` elements are present in the DOM. The module leaves `collapse_groups` unset (falsy), and the backend runs the standard export path.
+
+    The resulting Excel file contains **all records** within all groups, including both group headers and individual rows.
+
+    ```
+    | Salesperson     | Order Ref | Customer       | Amount    |
+    |-----------------|-----------|----------------|-----------|
+    | Alice Martin    |           |                | 45,200.00 |
+    |                 | S/00042   | Acme Corp      | 12,000.00 |
+    |                 | S/00051   | Beta Ltd       | 33,200.00 |
+    | Bob Johnson     |           |                | 31,800.00 |
+    |                 | S/00038   | Gamma Inc      | 31,800.00 |
+    ```
+  </Tab>
+</Tabs>
+
+## Detection logic
+
+The expand-state detection is purely DOM-based. The module checks:
+
+```javascript
+const hasDataRow = document.querySelectorAll(".o_data_row").length > 0;
+const hasGroup   = document.querySelectorAll(".o_group_header").length > 0;
+const collapseGroups = !hasDataRow && hasGroup;
+```
+
+`collapse_groups` is only `true` when there are group headers **and** no visible data rows. A list view with no grouping applied (where `hasGroup` is `false`) always exports normally.
+
+<Note>
+  Partially expanded views — where some groups are expanded and others are collapsed — always trigger a full export, because at least one `.o_data_row` is present in the DOM.
+</Note>
+
+## Backend implementation
+
+The backend controller extends `ExcelExport` and overrides `from_group_data`. When `collapse_groups` is `true`, it iterates over the top-level group nodes and clears their `children` and `data` while preserving `aggregated_values` (the summary totals):
+
+```python
+def from_group_data(self, fields, columns_headers, groups):
+    collapse_groups = self.context.get("collapse_groups")
+    if collapse_groups:
+        for _child_key, child_node in groups.children.items():
+            aggregated_values = child_node.aggregated_values
+            if child_node.children:
+                child_node.children = OrderedDict()
+            if child_node.data:
+                child_node.data = []
+            child_node.aggregated_values = aggregated_values
+    return super().from_group_data(fields, columns_headers, groups)
+```
+
+This ensures that group summary rows (totals, counts, averages) are preserved in the collapsed export even though individual records are omitted.
+
+## Module details
+
+| Property | Value |
+|---|---|
+| Technical name | `web_excel_export_dynamic_expand` |
+| Version | 18.0.1.0.0 |
+| License | AGPL-3 |
+| Author | ForgeFlow, OCA |
+| Depends on | `web` |

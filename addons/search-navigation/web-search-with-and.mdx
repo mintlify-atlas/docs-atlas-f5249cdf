@@ -1,0 +1,88 @@
+---
+title: "Use AND conditions on omnibar search"
+description: "Search for records matching multiple values on the same field using AND logic instead of the default OR behavior."
+---
+
+By default, when you search for multiple values on the same field in Odoo, results are joined with **OR**. The `web_search_with_and` addon lets you switch to **AND** logic on demand by holding the Shift key before confirming a search tag.
+
+## How OR vs AND search behaves
+
+<Tabs>
+  <Tab title="Default OR behavior (without addon)">
+    1. Search for `John` on the **Name** field — Odoo returns all customers whose name contains "John".
+    2. Search for `Smith` on the same **Name** field.
+    3. Odoo now shows customers whose name contains **"John" OR "Smith"**.
+
+    The two search tags share the same query group, so the domain is:
+
+    ```python
+    ["|", ("name", "ilike", "John"), ("name", "ilike", "Smith")]
+    ```
+  </Tab>
+  <Tab title="AND behavior (with addon + Shift)">
+    1. Search for `John` on the **Name** field — results show customers containing "John".
+    2. Type `Smith`, **hold Shift**, then click or press Enter to confirm the field.
+    3. Odoo now shows customers whose name contains **"John" AND "Smith"**.
+
+    Each Shift-confirmed tag is placed in its own query group, producing:
+
+    ```python
+    ["&", ("name", "ilike", "John"), ("name", "ilike", "Smith")]
+    ```
+  </Tab>
+</Tabs>
+
+## Using AND search
+
+<Steps>
+  <Step title="Type your first search term">
+    Click the search bar at the top of any list or kanban view and type your first value (e.g. `John`). Select the field to search on (e.g. **Name**) and confirm it. A search tag appears in the bar.
+  </Step>
+  <Step title="Type your second term">
+    Type the next value in the search bar (e.g. `Smith`).
+  </Step>
+  <Step title="Hold Shift and confirm">
+    **Press and hold the Shift key**, then click the field suggestion with your mouse or navigate to it with the keyboard and press Enter.
+
+    The new tag is added in a separate query group, so Odoo intersects the two conditions with AND.
+  </Step>
+  <Step title="Repeat as needed">
+    Each additional Shift-confirmed tag creates another AND group. You can mix normal (OR) and Shift (AND) tags freely in the same search bar.
+  </Step>
+</Steps>
+
+<Note>
+The Shift modifier only affects the tag that is being confirmed at the moment you hold the key. Tags added without Shift continue to follow the default OR grouping with other tags on the same field.
+</Note>
+
+## How it works
+
+The addon patches two Odoo core JavaScript classes:
+
+**`SearchBar`** (`search_bar.esm.js`) — records whether the Shift key is held at the moment a search item is selected and forwards that flag as `isShiftKey` inside the autocomplete value:
+
+```javascript
+onSearchKeydown(ev) {
+    this.isShiftKey = ev.shiftKey || false;
+    super.onSearchKeydown(ev);
+},
+```
+
+**`SearchModel`** (`search_model.esm.js`) — overrides `_getGroups()` to assign a fresh random `groupId` to any query element whose autocomplete value carries `isShiftKey: true`. Because each Shift-tagged element gets a unique group, Odoo's search domain builder wraps them in separate AND clauses rather than combining them with OR inside a shared group:
+
+```javascript
+if (queryElem.autocompleteValue.isShiftKey) {
+    groupId = Math.random();
+}
+```
+
+## Installation
+
+The addon has a single dependency on the core `web` module:
+
+```python
+# __manifest__.py
+"depends": ["web"],
+```
+
+No additional configuration is required after installation. The Shift-key behaviour is available immediately on all list, kanban, and other searchable views.

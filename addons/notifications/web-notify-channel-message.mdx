@@ -1,0 +1,115 @@
+---
+title: 'Web Notify Channel Message'
+description: 'Automatically deliver a live popup notification to all channel members when a new message is posted in a discuss channel.'
+---
+
+`web_notify_channel_message` extends the Odoo Discuss messaging system so that every member of a `discuss.channel` receives a real-time popup notification whenever a new message is posted. No manual configuration is required — the behaviour activates automatically on installation.
+
+<Info>
+  This module depends on both `web_notify` and `mail`. Install `web_notify` first or let Odoo resolve the dependency automatically during installation.
+</Info>
+
+## How it works
+
+The module overrides `discuss.channel.message_post`. After the base `message_post` call completes, `_notify_message` iterates over the channel's partner list, resolves each partner to its user(s), and calls `notify_info` for every user who is **not** the author of the just-posted message.
+
+```
+message_post(body="Hello")
+  └─ super().message_post(...)      # standard Odoo mail processing
+  └─ _notify_message(message)
+       └─ for each channel_partner_id:
+            └─ for each user (excluding the author):
+                 └─ user.notify_info(
+                      message="You have a new message in channel <name>"
+                    )
+```
+
+### Notification text
+
+The popup body is translated and follows the pattern:
+
+```
+You have a new message in channel <channel name>
+```
+
+The notification type is `info` (blue) and is non-sticky — it disappears automatically after a few seconds.
+
+## Privilege escalation for cross-user notifications
+
+Base `web_notify` prevents non-admin users from calling `notify_*` on behalf of another user. This module overrides `res.users._notify_channel` to detect the internal `_notify_channel_message` context flag and re-call the parent method under `sudo()`, bypassing the restriction safely:
+
+```python
+def _notify_channel(self, type_message="default", message="Default message", ...):
+    if self.env.context.get("_notify_channel_message", False):
+        # Called internally by this module — elevate to sudo to allow
+        # cross-user notification delivery
+        return super(ResUsers, self.sudo())._notify_channel(
+            type_message=type_message, message=message, ...
+        )
+    return super()._notify_channel(type_message=type_message, message=message, ...)
+```
+
+<Warning>
+  The `sudo()` escalation only occurs when the `_notify_channel_message` context key is `True`. It is not exposed to user-facing code and cannot be triggered from the UI.
+</Warning>
+
+## Behaviour details
+
+<AccordionGroup>
+  <Accordion title="Who receives the notification?">
+    All users whose partner record is in `channel_partner_ids` on the channel, **except** the user who authored the posted message. Each partner can have multiple user accounts; all resolved users receive the notification.
+  </Accordion>
+
+  <Accordion title="What message types trigger notifications?">
+    `message_post` is called for every `message_type` value (e.g., `"notification"`, `"comment"`, `"email"`). The override does not filter by `message_type`, so all posts to the channel trigger notifications.
+  </Accordion>
+
+  <Accordion title="What if a channel has no partner members?">
+    `channel_partner_ids` will be empty and the loop in `_notify_message` will not execute. No notifications are sent.
+  </Accordion>
+
+  <Accordion title="Is there any configuration?">
+    No. The module activates globally for all `discuss.channel` records as soon as it is installed. There are no per-channel or per-user toggles.
+  </Accordion>
+</AccordionGroup>
+
+## Source model reference
+
+### `discuss.channel` override
+
+| Method | Description |
+|--------|-------------|
+| `_notify_message(message)` | Sends `notify_info` to all non-author channel members for the given `mail.message` record. |
+| `message_post(**kwargs)` | Calls `super().message_post(...)`, then calls `_notify_message`. Returns the new `mail.message`. |
+
+### `res.users` override
+
+| Method | Description |
+|--------|-------------|
+| `_notify_channel(...)` | Wraps the base implementation; re-dispatches under `sudo()` when `_notify_channel_message` is set in context. |
+
+## Example: posting a message programmatically
+
+```python
+channel = self.env["discuss.channel"].browse(channel_id)
+
+# Posting via message_post automatically triggers notifications
+# to all channel members except the current user (author).
+channel.message_post(
+    author_id=self.env.user.partner_id.id,
+    body="Deployment complete — please verify your reports.",
+    message_type="comment",
+    subtype_xmlid="mail.mt_comment",
+)
+```
+
+## Module metadata
+
+| Field | Value |
+|-------|-------|
+| Technical name | `web_notify_channel_message` |
+| Version | 18.0.1.0.1 |
+| License | AGPL-3 |
+| Author | ForgeFlow, OCA |
+| Dependencies | `web_notify`, `mail` |
+| Development status | Alpha |

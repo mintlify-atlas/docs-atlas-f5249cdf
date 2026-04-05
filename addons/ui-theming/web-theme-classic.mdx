@@ -1,0 +1,87 @@
+---
+title: "Web Theme Classic"
+description: "Restores contrasted field borders and required-field indicators to Odoo 18 form and list views, matching the visual style of Odoo 15."
+---
+
+Since Odoo 17 the UI adopted a minimalist design where field borders are invisible until a field is hovered or focused, and required fields show no visual indicator until you attempt to save. `web_theme_classic` addresses both issues without removing the newer "save on the fly" behaviour introduced in Odoo 16+.
+
+## What it changes
+
+<CardGroup cols={2}>
+  <Card title="Visible field borders" icon="square">
+    All `o_input` fields always render with a visible border (`$o-gray-500`), not just on hover or focus. Focused fields switch to the community primary colour.
+  </Card>
+  <Card title="Required field highlight" icon="asterisk">
+    Fields marked as required receive a subtle blue-tinted background (`mix(#0000ff, transparent, 10)`) so users immediately know which fields must be filled.
+  </Card>
+  <Card title="Correct nested border handling" icon="layers">
+    Odoo's default CSS applies border custom properties without regard for nesting. The module patches focus-within logic so nested `o_field_widget` elements inherit borders correctly.
+  </Card>
+  <Card title="Dark mode support" icon="moon">
+    A companion `web_theme_classic.dark.scss` file is loaded into the `web.assets_web_dark` bundle so the classic style works correctly with `web_dark_mode`.
+  </Card>
+</CardGroup>
+
+## Installation
+
+Install the module using its technical name:
+
+```text
+web_theme_classic
+```
+
+**Dependencies:** `web`  
+**License:** AGPL-3
+
+## Behaviour details
+
+### Form view borders
+
+In a standard Odoo 18 form view, `--o-input-border-color` is set to `transparent` for fields that are neither hovered nor focused. This module overrides that to always use `$wtc-input-border-color` (`$o-gray-500`):
+
+```scss
+.o_form_view {
+  &:not(.o_field_highlight)
+    .o_field_widget:not(.o_field_invalid):not(.o_field_highlight)
+    .o_input:not(:hover):not(:focus) {
+    --o-input-border-color: #{$wtc-input-border-color};
+  }
+}
+```
+
+### Required field background
+
+The `.o_required_modifier` class receives a CSS custom property override that applies a faint blue background to required inputs:
+
+```scss
+.o_required_modifier {
+  @include print-variable(
+    o-input-background-color,
+    $wtc-input-background-color-required  // mix(#0000ff, transparent, 10)
+  );
+}
+```
+
+<Note>
+  The background is mixed with `transparent` rather than a solid colour. This ensures monetary fields — which layer a currency symbol `<span>` over the `<input>` — render correctly without the symbol being obscured.
+</Note>
+
+### List view (editable rows)
+
+In selected editable rows, `o_required_modifier` cells display the same blue-tinted background and retain the border. Invalid cells use Odoo's standard `$o-input-invalid-bg` and `$o-danger` border instead.
+
+### SCSS variables
+
+| Variable | Default value | Purpose |
+|---|---|---|
+| `$wtc-input-border-color` | `$o-gray-500` | Border colour for all inputs |
+| `$wtc-input-border-color-focus` | `$o-community-color` | Border colour when focused |
+| `$wtc-input-color-required` | `$o-gray-900` | Text colour in required fields |
+| `$wtc-input-background-color-required` | `mix(#0000ff, transparent, 10)` | Background of required fields |
+| `$wtc-input-color-placeholder-required` | `#6c757d` | Placeholder text in required fields |
+
+## Technical notes
+
+- **Asset bundles:** `web_theme_classic.scss` is injected into `web.assets_backend`. The dark variant `web_theme_classic.dark.scss` is injected *before* itself into `web.assets_web_dark`, ensuring dark-mode variables take precedence.
+- There are no Python models, controllers, or XML views — the module is CSS-only.
+- The module is declared as `application: True` so it appears in the Apps list.

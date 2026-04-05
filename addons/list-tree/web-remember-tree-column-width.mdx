@@ -1,0 +1,97 @@
+---
+title: 'Remember tree column widths'
+description: 'Persist list view column widths across sessions, page reloads, filters, and groupings using browser localStorage.'
+---
+
+This addon makes Odoo remember the widths you set for list view columns. Normally, column widths reset whenever you navigate away, apply a filter, add a grouping, or reload the page. With this module installed, your resized widths survive all of those events.
+
+## How it works
+
+The module patches Odoo's `useMagicColumnWidths` hook inside `ListRenderer`. When you finish dragging a column resizer, the column's new pixel width is written to `browser.localStorage` under a key that encodes both the model name and the field name:
+
+```
+odoo.columnWidth.<resModel>.<fieldName>
+```
+
+On every render (including initial load, window resize, and re-render after filter/group changes), the module reads these stored values and applies them to the corresponding `<th>` elements in the table header.
+
+<Info>
+  Column widths are stored **per browser** using `localStorage`. They are not synced to the server and are not shared between users or devices. Each user's browser retains its own independent set of column widths.
+</Info>
+
+## Installation
+
+Install the `web_remember_tree_column_width` module. It depends only on `web` and requires no additional configuration.
+
+## Usage
+
+Column width persistence is fully automatic after installation.
+
+<Steps>
+  <Step title="Open any list view">
+    Navigate to any model's list view, such as Contacts, Products, or Sales Orders.
+  </Step>
+  <Step title="Resize a column">
+    Drag the column separator in the table header to adjust a column's width, exactly as you would in standard Odoo.
+  </Step>
+  <Step title="Navigate away and return">
+    Leave the view — apply a filter, switch to another menu item, or reload the page. When you return, the column widths you set are automatically restored.
+  </Step>
+</Steps>
+
+## Storage mechanism
+
+Width values are stored in `localStorage` using the following key pattern:
+
+```
+odoo.columnWidth.{model_name}.{field_name}
+```
+
+For example, resizing the `name` column on `res.partner` stores:
+
+```
+odoo.columnWidth.res.partner.name  →  "240"
+```
+
+The value is the width in pixels (stored as a string). When a stored width is found, it is applied as `{width}px` on the header `<th>` element.
+
+<AccordionGroup>
+  <Accordion title="Which columns are persisted?">
+    All resizable field columns are persisted. The module skips:
+
+    - Button columns (those with the `o_list_button` class)
+    - Columns without a field name (e.g., action buttons)
+    - The row selector checkbox column
+
+    The selector column offset is handled automatically so column index mapping remains correct whether or not the list has row selectors.
+  </Accordion>
+  <Accordion title="When are stored widths applied?">
+    Stored widths are applied in two situations:
+
+    1. **On initial render** — via `useEffect`, so widths are applied after the DOM is ready.
+    2. **On window resize** — via a debounced listener (300 ms), so widths are reapplied after the browser window is resized and Odoo recalculates column layout.
+  </Accordion>
+  <Accordion title="How do I reset a column to its default width?">
+    There is no built-in UI to clear a stored width. You can remove entries from `localStorage` using your browser's developer tools:
+
+    1. Open DevTools (`F12`)
+    2. Go to **Application** → **Local Storage** → your Odoo origin
+    3. Find and delete keys beginning with `odoo.columnWidth.`
+
+    Alternatively, clear all site data for the Odoo origin to reset everything.
+  </Accordion>
+</AccordionGroup>
+
+## Compatibility with `web_tree_column_keyboard_resize`
+
+This module stores widths set via mouse drag only. If you also install [`web_tree_column_keyboard_resize`](/addons/list-tree/web-tree-column-keyboard-resize), note that keyboard-adjusted widths are intentionally **not** persisted — they are session-scoped for temporary visibility adjustments during editing.
+
+## Module details
+
+| Property | Value |
+|---|---|
+| Technical name | `web_remember_tree_column_width` |
+| Version | 18.0.1.0.2 |
+| License | LGPL-3 |
+| Author | Vauxoo, OCA |
+| Depends on | `web` |

@@ -1,0 +1,167 @@
+---
+title: 'Web Timeline'
+description: 'An interactive visualization chart for displaying model records as time-based events on a scrollable, zoomable timeline.'
+---
+
+The `web_timeline` addon adds a new **timeline view type** to Odoo, powered by the [vis-timeline](https://visjs.github.io/vis-timeline/examples/timeline) library. Records are rendered as horizontal bars whose widths represent event duration, grouped by a configurable field, and fully interactive with mouse-driven zoom, pan, drag-to-reschedule, and inline record creation.
+
+## Installation
+
+Add `web_timeline` to your addon's `depends` list in `__manifest__.py`:
+
+```python
+"depends": ["web", "web_timeline"],
+```
+
+## Declaring a timeline view
+
+A timeline view is registered as a standard `ir.ui.view` with `type="timeline"`. The `<timeline>` arch element requires two attributes: `date_start` and `default_group_by`.
+
+```xml
+<record id="ir_cron_timeline" model="ir.ui.view">
+    <field name="model">ir.cron</field>
+    <field name="type">timeline</field>
+    <field name="arch" type="xml">
+        <timeline date_start="nextcall" default_group_by="model_id" />
+    </field>
+</record>
+```
+
+After creating the view record, register it on the action's `view_mode`:
+
+```xml
+<function model="ir.actions.act_window" name="write">
+    <value eval="[ref('base.ir_cron_act')]" />
+    <value
+        model="ir.actions.act_window"
+        eval="{
+            'view_mode': obj().env.ref('base.ir_cron_act').view_mode + ',timeline',
+            'view_ids': [
+                Command.create({
+                    'view_mode': 'timeline',
+                    'view_id': ref('ir_cron_timeline'),
+                }),
+            ],
+        }"
+    />
+</function>
+```
+
+Users access the timeline by clicking the clock icon in the view switcher.
+
+## Arch attributes reference
+
+<AccordionGroup>
+  <Accordion title="Required attributes">
+
+| Attribute | Type | Description |
+|---|---|---|
+| `date_start` | field name | **Required.** The date/datetime field that marks the start of each event bar. |
+| `default_group_by` | field name | **Required.** The field used to group records into swimlanes. |
+
+  </Accordion>
+
+  <Accordion title="Duration attributes">
+
+| Attribute | Type | Description |
+|---|---|---|
+| `date_stop` | field name | End date/datetime field. Defines the right edge of the bar. |
+| `date_delay` | field name | Duration field (in hours). Used instead of `date_stop` when there is no explicit end date. |
+
+Either `date_stop` or `date_delay` should be provided; if both are omitted, events render as points.
+
+  </Accordion>
+
+  <Accordion title="Display and behavior attributes">
+
+| Attribute | Type | Default | Description |
+|---|---|---|---|
+| `mode` | `day` \| `week` \| `month` \| `fit` | `fit` | Initial zoom level. `fit` zooms to encompass all records. |
+| `colors` | color expression string | — | Semicolon-separated `color:field_expr` pairs for conditional coloring. |
+| `dependency_arrow` | field name | — | Many2many field used to draw dependency arrows between records. |
+| `stack` | boolean | `true` | Stack overlapping items vertically within a group. |
+| `min_height` | integer | `300` | Minimum pixel height for the timeline container. |
+| `zoomKey` | `ctrlKey` \| `altKey` \| `metaKey` | `ctrlKey` | Modifier key required to zoom with the scroll wheel. |
+| `margin` | JSON object | `{"item": 2}` | Pixel margin between items. Example: `{"item": 5, "axis": 2}`. |
+| `event_open_popup` | boolean | `false` | Open records in a dialog popup instead of navigating to the form. |
+| `create` | boolean | `true` | Allow creating records from the timeline. |
+| `edit` | boolean | `true` | Allow editing records by dragging. |
+| `delete` | boolean | `true` | Allow deleting records from the timeline. |
+
+  </Accordion>
+</AccordionGroup>
+
+## Color coding
+
+The `colors` attribute accepts a semicolon-delimited list of `color:field_condition` pairs. The field condition uses the same Python-like expression syntax as Odoo tree view decorators.
+
+```xml
+<timeline
+    date_start="date_start"
+    date_stop="date_end"
+    default_group_by="user_id"
+    colors="red:state=='cancel';green:state=='done';blue:state=='draft'"
+/>
+```
+
+## Full arch example
+
+```xml
+<record id="project_task_timeline" model="ir.ui.view">
+    <field name="model">project.task</field>
+    <field name="type">timeline</field>
+    <field name="arch" type="xml">
+        <timeline
+            date_start="date_start"
+            date_stop="date_deadline"
+            default_group_by="user_ids"
+            colors="red:priority=='1';green:stage_id.fold==True"
+            mode="week"
+            stack="True"
+            event_open_popup="True"
+        >
+            <field name="name" />
+            <field name="priority" />
+            <field name="stage_id" />
+        </timeline>
+    </field>
+</record>
+```
+
+## Mouse and keyboard interactions
+
+<CardGroup cols={2}>
+  <Card title="Zoom" icon="search">
+    Hold the configured `zoomKey` (default: Ctrl) and scroll the mouse wheel to zoom in or out.
+  </Card>
+  <Card title="Pan" icon="arrows-left-right">
+    Click and drag on an empty area of the timeline to pan left or right.
+  </Card>
+  <Card title="Select records" icon="mouse-pointer">
+    Click a record bar to select it. Use Ctrl+click for multi-select or Shift+click for range selection.
+  </Card>
+  <Card title="Move records" icon="hand">
+    Drag a selected record bar horizontally to reschedule it. Drag it into a different group lane to change the grouped field value.
+  </Card>
+  <Card title="Edit a record" icon="pencil">
+    Double-click a record bar to open its edit form.
+  </Card>
+  <Card title="Create a record" icon="plus">
+    Double-click an empty area to create a record with the clicked date as start. Hold Ctrl and drag to set a start and end date.
+  </Card>
+  <Card title="Delete a record" icon="trash">
+    Select a single record — a red × button appears in its top-left corner. Click it to delete.
+  </Card>
+  <Card title="Edit a group" icon="folder">
+    Click the group label in the left panel to open the record that represents the group.
+  </Card>
+</CardGroup>
+
+<Note>
+  After a search, filter, or group-by change the timeline automatically re-fits the window to show all current records.
+</Note>
+
+## Dependencies
+
+- `vis-timeline` is bundled with the addon. No external CDN is required.
+- The addon depends only on `web` and has no other OCA dependencies.

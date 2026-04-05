@@ -1,0 +1,100 @@
+---
+title: 'Clickable many2one fields in tree views'
+description: 'Open linked records directly from many2one columns in Odoo list views using an inline navigation button — no form required.'
+---
+
+This addon adds a small navigation button next to every many2one field value in a list (tree) view. Clicking the button opens the linked record's form view without leaving the current list — useful when you need to inspect or edit a related record mid-task without navigating away.
+
+## How it works
+
+The module patches Odoo's `ListRenderer` to inject an arrow button (`→`) inside every cell that renders a many2one field with a non-empty value. When clicked, the button triggers `ir.actions.act_window` for the related model and record, opening the form view.
+
+The action is fired via Odoo's `action` service, so the linked form opens in the standard way — either in the main content area or as a dialog, depending on the `target` configuration.
+
+<Info>
+  After installation, **all** many2one and reference fields in every list view become clickable automatically. No XML changes or view customisation is needed.
+</Info>
+
+## Installation
+
+Install the `web_tree_many2one_clickable` module. It depends only on `web` and requires no additional configuration.
+
+## Configuration
+
+No configuration is required. The button is rendered automatically for every many2one field in every list view across the entire Odoo backend.
+
+If you need to **disable** the button for a specific field, add `no_open: true` to that field's options:
+
+```xml
+<field name="arch" type="xml">
+    <tree string="Sales Orders">
+        <!-- This many2one will NOT show the clickable button -->
+        <field name="partner_id" options="{'no_open': true}"/>
+        <!-- This one will show the button (default behaviour) -->
+        <field name="user_id"/>
+    </tree>
+</field>
+```
+
+## Usage
+
+<Steps>
+  <Step title="Open any list view">
+    Navigate to any model that displays a list view containing many2one columns, such as Sales Orders, Purchase Orders, or Invoices.
+  </Step>
+  <Step title="Hover over a many2one cell">
+    Move your mouse pointer over any cell that displays a linked record name. A small arrow button (`→`) appears on the right side of the cell.
+  </Step>
+  <Step title="Click the arrow button">
+    Click the arrow button. The form view of the linked record opens immediately. The button click does not select the row or trigger row-level actions.
+  </Step>
+</Steps>
+
+<Note>
+  The button only appears when the cell has a value. Empty many2one cells do not show the button.
+</Note>
+
+## Behaviour details
+
+<AccordionGroup>
+  <Accordion title="Which fields get the button?">
+    The button is rendered when all of the following are true:
+
+    - The column's field type is `many2one`
+    - The record has a value for that field (i.e., it is not empty)
+    - The cell is using the default formatter (not a custom widget that overrides rendering)
+    - The field does not have `no_open: true` in its options
+  </Accordion>
+  <Accordion title="Where does the linked record open?">
+    The linked record opens using `ir.actions.act_window` with `views: [[false, 'form']]`. The `target` is set to `"target"` (the main content area). The field's `context` is forwarded to the action, so any context keys defined on the field in the view are preserved.
+  </Accordion>
+  <Accordion title="Does clicking the button affect row selection?">
+    No. The button calls `ev.stopPropagation()`, so clicking it does not select the row, trigger edit mode, or fire any other row-level event.
+  </Accordion>
+</AccordionGroup>
+
+## Disabling the button per field
+
+To opt a field out of the clickable behaviour, set `no_open` to `true` in the field's `options`. This is useful when navigation to the related record would be confusing or irrelevant in context.
+
+```xml
+<record id="my_list_view" model="ir.ui.view">
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_tree"/>
+    <field name="arch" type="xml">
+        <field name="partner_id" position="attributes">
+            <attribute name="options">{"no_open": true}</attribute>
+        </field>
+    </field>
+</record>
+```
+
+## Module details
+
+| Property | Value |
+|---|---|
+| Technical name | `web_tree_many2one_clickable` |
+| Version | 18.0.1.0.1 |
+| License | AGPL-3 |
+| Author | Therp BV, Tecnativa, Camptocamp, Onestein, OCA |
+| Depends on | `web` |

@@ -1,0 +1,112 @@
+---
+title: 'Web Pivot Computed Measure'
+description: 'Add user-defined computed measures to the Odoo pivot view, combining two existing measures with arithmetic operations at runtime.'
+---
+
+The `web_pivot_computed_measure` addon extends the standard Odoo pivot view with support for **computed measures**: derived KPIs that combine two existing measures using arithmetic operations. Users can define them interactively from the Measures menu without any Python or XML changes.
+
+## Installation
+
+Add the addon to your `depends` list:
+
+```python
+"depends": ["web", "web_pivot_computed_measure"],
+```
+
+## How it works
+
+Once installed, any pivot view gains a **Computed Measure** option in the Measures drop-down. Clicking it reveals an inline form where the user configures the new measure. After adding it, the computed column appears alongside regular measures and can be toggled on or off like any other measure.
+
+Computed measures are resolved entirely on the client side using the values fetched for the two referenced measures. The formula is evaluated with a JavaScript expression engine that supports `+`, `-`, `*`, `/`, and parentheses.
+
+## Using computed measures
+
+<Steps>
+  <Step title="Open a pivot view">
+    Navigate to any model that has a pivot view. The built-in demo registers one on **res.partner** under the Demo menu.
+  </Step>
+  <Step title="Open the Measures menu">
+    Click the **Measures** button in the pivot view control panel.
+  </Step>
+  <Step title="Click Computed Measure">
+    Select the **Computed Measure** entry at the bottom of the list. A panel expands inline.
+  </Step>
+  <Step title="Configure the measure">
+    Fill in the fields described in the table below and click **Add**.
+  </Step>
+</Steps>
+
+## Computed measure options
+
+| Field | Token | Description |
+|---|---|---|
+| **Measure 1** | `m1` | First operand. Any active measure on the view. |
+| **Measure 2** | `m2` | Second operand. Any active measure on the view (can equal Measure 1). |
+| **Operation** | — | Arithmetic operation between `m1` and `m2`. |
+| **Name** | — | Display label for the new column. Leave empty to auto-generate a label from the formula. |
+| **Format** | — | How the result is printed: Integer, Float, or Percentage. |
+| **Formula** *(debug only)* | — | Custom expression string, available in developer mode. |
+
+### Built-in operations
+
+| Operation label | Formula | Notes |
+|---|---|---|
+| Sum | `m1 + m2` | |
+| Sub | `m1 - m2` | |
+| Mult | `m1 * m2` | |
+| Div | `m1 / m2` | Result formatted as Float |
+| Perc | `m1 / m2` | Result formatted as Percentage (`value × 100`) |
+| Custom | user-defined | Developer mode only. Supports `+`, `-`, `*`, `/`, `(`, `)`. |
+
+### Custom formula syntax
+
+In developer mode the **Custom** operation exposes a formula text field. Variable names must match the internal field names of the selected measures (e.g. `__computed_1234567890` for a previously created computed measure):
+
+```
+(m1 + m2) / m1
+m1 * m2 - m1
+```
+
+Supported operators: `+`, `-`, `*`, `/`, `(`, `)`.
+
+<Note>
+  A measure or computed measure that is referenced by an active computed measure cannot be deactivated until the dependent computed measure is first removed.
+</Note>
+
+## Saving computed measures as favorites
+
+Computed measures are preserved when saving the current pivot state as a **Favorite** via the search bar. Restoring the favorite re-adds the computed measure columns automatically.
+
+## Mixing computed measures
+
+Computed measures can reference other computed measures as operands, enabling chained calculations. For example, you can compute `margin = revenue - cost` and then compute `margin_pct = margin / revenue`.
+
+## Demo pivot view
+
+The addon ships a demo pivot view on `res.partner` that you can use to test the feature immediately after installation:
+
+```xml
+<record id="demo_view_res_partner_report_pivot" model="ir.ui.view">
+    <field name="name">res.partner.report.pivot</field>
+    <field name="model">res.partner</field>
+    <field name="arch" type="xml">
+        <pivot string="Partners Table" sample="1">
+            <field name="active" type="col" />
+            <field name="name" type="row" />
+        </pivot>
+    </field>
+</record>
+```
+
+Navigate to the **Demo Pivot** menu entry, expand the Measures panel, and click **Computed Measure** to start experimenting.
+
+## Extending to other views
+
+The `DropdownItemCustomMeasure` OWL component and `PivotModel` patches are designed to be reusable. Modules that implement measure-based views (e.g. graph views with aggregation) can extend the same mechanism by passing their model instance to the component:
+
+```javascript
+DropdownItemCustomMeasure.props = {
+    measures: Object,
+    model: Object,  // must implement addComputedMeasure(id, field1, field2, operation, name, format)
+};
+```

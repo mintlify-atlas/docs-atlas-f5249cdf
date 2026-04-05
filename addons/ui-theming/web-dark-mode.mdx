@@ -1,0 +1,124 @@
+---
+title: "Dark Mode"
+description: "Per-user dark mode for the Odoo Community Edition backend, toggled from the user menu with optional device-preference detection."
+---
+
+`web_dark_mode` adds a fully themed dark mode to the Odoo CE backend. Each user can switch independently without affecting other users. The module detects the OS/browser colour-scheme preference on first load and can optionally keep dark mode tied to the device rather than stored server-side.
+
+<Warning>
+  This module is mutually exclusive with `web_enterprise`. Installing it alongside the enterprise web client is not supported.
+</Warning>
+
+## Features
+
+- **Per-user toggle** in the user dropdown menu (top-right corner)
+- **System preference detection** — if no `color_scheme` cookie exists, the module reads `prefers-color-scheme` media query and applies dark or light accordingly
+- **Device-dependent mode** — an optional setting stores the preference in a cookie only (not server-side), so the same user account can use different modes on different devices
+- **Full SCSS override** — primary variables, secondary variables, Bootstrap overrides, and component-level dark styles are all included
+
+## Installation
+
+Install the module using its technical name:
+
+```text
+web_dark_mode
+```
+
+**Dependencies:** `web`  
+**License:** AGPL-3
+
+## Usage
+
+### Enabling dark mode
+
+<Steps>
+  <Step title="Open the user menu">
+    Click your avatar or name in the top-right corner of the backend to open the dropdown.
+  </Step>
+  <Step title="Toggle Dark Mode">
+    Click the **Dark Mode** switch. The page reloads and the dark theme is applied immediately. Your preference is saved to your user record (`res.users.dark_mode`).
+  </Step>
+  <Step title="Disable dark mode">
+    Click the switch again to return to the light theme.
+  </Step>
+</Steps>
+
+### Device-dependent mode
+
+If you want dark mode to follow each device's OS preference instead of being stored per-user account:
+
+<Steps>
+  <Step title="Open your profile">
+    Go to **Settings → Users** and open your user record, or click your avatar and select **My Profile**.
+  </Step>
+  <Step title="Enable device-dependent dark mode">
+    Enable the **Device Dependent Dark Mode** checkbox in your preferences and save.
+  </Step>
+</Steps>
+
+When this option is active, the `color_scheme` cookie determines the active theme on each device independently. The server-side `dark_mode` boolean on the user record is still updated when the toggle is clicked, but the cookie takes precedence for rendering.
+
+## Technical details
+
+### User model fields
+
+Two boolean fields are added to `res.users`:
+
+| Field | Description |
+|---|---|
+| `dark_mode` | Stores the user's current dark/light preference server-side |
+| `dark_mode_device_dependent` | When true, the device OS preference is honoured |
+
+Both fields are added to `SELF_READABLE_FIELDS` and `SELF_WRITEABLE_FIELDS` so users can read and update their own preferences without administrator rights.
+
+### Asset bundle structure
+
+The module uses lazy loading to avoid downloading dark-mode CSS for users who have not enabled it:
+
+| Bundle | Contents |
+|---|---|
+| `web.assets_backend` | `switch_item.esm.js` — registers the toggle in the user menu |
+| `web.assets_backend_lazy_dark` | Includes `web.assets_variables_dark` and `web.assets_backend_helpers_dark` |
+| `web.assets_variables_dark` | `primary_variables.dark.scss`, `secondary_variables.dark.scss`, component `.variables.dark.scss` |
+| `web.assets_backend_helpers_dark` | `bootstrap_overridden.dark.scss`, `bs_functions_overrides.dark.scss` |
+| `web.assets_web_dark` | All `.dark.scss` files (full dark theme) |
+
+### Dark SCSS variable overrides
+
+The dark theme inverts the Odoo gray scale so dark surfaces use low-lightness values and text uses high-lightness values:
+
+```scss
+$o-white: #000000 !default;
+$o-black: #ffffff !default;
+
+$o-gray-100: #181818 !default;  // darkest surface
+$o-gray-200: #1f1f1f !default;
+$o-gray-300: #303030 !default;
+$o-gray-400: #4a4a4a !default;
+$o-gray-500: #696969 !default;
+$o-gray-600: #8b8b8b !default;
+$o-gray-700: #aeaeae !default;
+$o-gray-800: #c0c0c0 !default;
+$o-gray-900: #c8c8c8 !default;  // lightest text
+
+$o-webclient-color-scheme: dark !default;
+$o-webclient-background-color: $o-gray-100 !default;
+$o-view-background-color: $o-gray-200 !default;
+```
+
+The enterprise action colour is overridden to `#00c7c7` (teal) for better contrast on dark backgrounds.
+
+### Toggle implementation
+
+The toggle is registered as a `switch` item in the `user_menuitems` registry via `colorSchemeService`:
+
+```javascript
+registry.category("user_menuitems").add("darkmode", darkModeSwitchItem);
+```
+
+Switching writes `dark_mode` to the server, updates the `color_scheme` cookie, and reloads the page. The cookie is read server-side by `ir.http` to inject the correct asset bundle.
+
+## Known limitations
+
+- Point of Sale dark mode is not yet implemented (tracked in the module's roadmap).
+- Not compatible with `web_enterprise`.

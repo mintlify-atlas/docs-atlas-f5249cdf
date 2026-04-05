@@ -1,0 +1,122 @@
+---
+title: 'Web Widget Numeric Step'
+description: 'Replace the plain number input with a stepper widget that adds + and – buttons, mouse-wheel support, and configurable min/max/step constraints.'
+---
+
+The `web_widget_numeric_step` addon provides the `numeric_step` widget for float fields. It wraps the standard number input with **+** and **−** buttons that increment or decrement the value by a configurable step. The mouse wheel also works for stepping, and min/max bounds are enforced automatically.
+
+## Installation
+
+```python
+"depends": ["web", "web_widget_numeric_step"],
+```
+
+## Basic usage
+
+Add `widget="numeric_step"` to any `float` field. The default step is `1`:
+
+```xml
+<field name="sale_delay" widget="numeric_step" />
+```
+
+## Options
+
+All options are passed through the `options` attribute as a JSON dictionary:
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `step` | float | `1.0` | Amount added or subtracted per click or wheel tick. |
+| `min` | float | no limit | Minimum allowed value. The − button will not go below this. |
+| `max` | float | no limit | Maximum allowed value. The + button will not go above this. |
+| `placeholder` | string | `None` | Placeholder text shown when the field is empty. |
+| `class` | string | `None` | Additional CSS classes applied to the input element. |
+
+## Examples
+
+<Tabs>
+  <Tab title="Quarter-unit steps with bounds">
+
+```xml
+<field
+    name="sale_delay"
+    widget="numeric_step"
+    options="{'step': 0.25, 'min': -1, 'max': 10}"
+/>
+```
+
+  </Tab>
+  <Tab title="Integer-style steps">
+
+```xml
+<field
+    name="interval_number"
+    widget="numeric_step"
+    options="{'step': 2, 'min': 0, 'max': 40}"
+/>
+```
+
+This is the configuration used by the addon's built-in demo on the **Scheduled Actions** form (the "Execute Every" field).
+
+  </Tab>
+  <Tab title="Step of 10 with max and placeholder">
+
+```xml
+<field
+    name="credit_limit"
+    widget="numeric_step"
+    options="{'step': 10, 'max': 15, 'placeholder': 'Enter limit'}"
+/>
+```
+
+  </Tab>
+</Tabs>
+
+## Interaction methods
+
+The widget supports three ways to step the value in edit mode:
+
+<CardGroup cols={3}>
+  <Card title="Button click" icon="mouse-pointer">
+    Click the **+** or **−** button rendered next to the input field.
+  </Card>
+  <Card title="Mouse wheel" icon="rotate">
+    Scroll the mouse wheel while hovering over the input. Scroll up to increment, scroll down to decrement. Throttled to once per 100 ms.
+  </Card>
+  <Card title="Arrow keys" icon="arrow-up">
+    Press the **↑** key to increment and the **↓** key to decrement while the input has focus.
+  </Card>
+</CardGroup>
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `↑` (Arrow Up) | Increment by `step` |
+| `↓` (Arrow Down) | Decrement by `step` |
+
+## Demo
+
+The addon ships a demo that modifies the **Scheduled Actions** (`ir.cron`) form to use the widget on the "Execute Every" field:
+
+```xml
+<record id="ir_cron_view_form" model="ir.ui.view">
+    <field name="model">ir.cron</field>
+    <field name="inherit_id" ref="base.ir_cron_view_form" />
+    <field name="arch" type="xml">
+        <field name="interval_number" position="attributes">
+            <attribute name="widget">numeric_step</attribute>
+            <attribute name="options">{'step': 2, 'min': 0, 'max': 40}</attribute>
+        </field>
+    </field>
+</record>
+```
+
+Navigate to **Settings → Technical → Scheduled Actions**, open any action, and use the "Execute Every" field to try the widget.
+
+You can also test the widget by going to **Settings → Users & Companies → Users**, selecting a user, and locating the **Credit Limit** field.
+
+## Technical notes
+
+- The widget extends `FloatField` from `@web/views/fields/float/float_field` and is registered under the name `numeric_step`.
+- It is only compatible with `float` typed fields. For integer fields, cast to float or use a float field with `digits=(10, 0)`.
+- Bounds checking (`min`/`max`) is performed in JavaScript. Server-side constraints (e.g. `_sql_constraints`) are independent and still apply on save.

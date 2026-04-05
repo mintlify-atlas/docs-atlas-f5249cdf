@@ -1,0 +1,153 @@
+---
+title: "Web Environment Ribbon"
+description: "Displays a configurable coloured ribbon in the top-left corner of every backend page to identify test or staging Odoo environments."
+---
+
+`web_environment_ribbon` overlays a diagonal ribbon on every Odoo backend page to visually distinguish test, staging, or development instances from production. The ribbon text, text colour, and background colour are all configurable through standard Odoo system parameters — no code changes required.
+
+## Features
+
+- Ribbon appears immediately after installation — no additional configuration needed
+- Ribbon text defaults to `TEST` followed by the database name
+- Fully customisable label, text colour, and background colour via system parameters
+- Database name can be embedded in the label dynamically using `{db_name}`
+- Ribbon can be hidden by setting its name parameter to `False`
+
+## Installation
+
+Install the module using its technical name:
+
+```text
+web_environment_ribbon
+```
+
+**Dependencies:** `web`  
+**License:** AGPL-3
+
+## Usage
+
+After installation, a red ribbon labelled **TEST** with the current database name appears in the top-left corner of every backend page. No further action is required.
+
+## Configuration
+
+All ribbon settings are managed through **Settings → Technical → Parameters → System Parameters**.
+
+<AccordionGroup>
+  <Accordion title="ribbon.name — Change or hide the ribbon label">
+    | Value | Result |
+    |---|---|
+    | `TEST<br/>({db_name})` | Default: shows "TEST" and the database name on two lines |
+    | Any text string | Displays that text as the ribbon label. HTML is supported (e.g., `<br/>` for line breaks). |
+    | `{db_name}` | Replaced at render time with the actual PostgreSQL database name |
+    | `False` | Hides the ribbon entirely |
+
+    **Default value:** `TEST<br/>({db_name})`
+
+    After changing this parameter, refresh the browser for the change to take effect.
+  </Accordion>
+
+  <Accordion title="ribbon.color — Change the ribbon text colour">
+    Set this parameter to any valid CSS colour value. Set to `False` to use the default.
+
+    **Default value:** `#f0f0f0` (near-white)
+
+    **Examples:**
+
+    ```text
+    #ffffff
+    black
+    rgb(255, 255, 255)
+    ```
+  </Accordion>
+
+  <Accordion title="ribbon.background.color — Change the ribbon background colour">
+    Set this parameter to any valid CSS colour value. Set to `False` to use the default.
+
+    **Default value:** `rgba(255,0,0,.6)` (semi-transparent red)
+
+    **Examples:**
+
+    ```text
+    rgba(255, 165, 0, 0.8)   /* orange, 80% opaque */
+    #ff6600
+    darkblue
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Step-by-step: changing the ribbon
+
+<Steps>
+  <Step title="Open System Parameters">
+    Navigate to **Settings → Technical → Parameters → System Parameters**.
+  </Step>
+  <Step title="Search for the parameter">
+    Search for `ribbon.name`, `ribbon.color`, or `ribbon.background.color` and open the record.
+  </Step>
+  <Step title="Edit the value">
+    Change the **Value** field to your desired label or CSS colour, then save.
+  </Step>
+  <Step title="Refresh your browser">
+    Reload the page to see the updated ribbon.
+  </Step>
+</Steps>
+
+### Common configurations
+
+<Tabs>
+  <Tab title="Staging environment">
+    | Parameter | Value |
+    |---|---|
+    | `ribbon.name` | `STAGING<br/>({db_name})` |
+    | `ribbon.color` | `#ffffff` |
+    | `ribbon.background.color` | `rgba(255,165,0,0.7)` |
+  </Tab>
+  <Tab title="Development environment">
+    | Parameter | Value |
+    |---|---|
+    | `ribbon.name` | `DEV` |
+    | `ribbon.color` | `#ffffff` |
+    | `ribbon.background.color` | `rgba(0,100,200,0.7)` |
+  </Tab>
+  <Tab title="Hidden ribbon (production)">
+    | Parameter | Value |
+    |---|---|
+    | `ribbon.name` | `False` |
+  </Tab>
+</Tabs>
+
+## Technical notes
+
+### System parameter keys
+
+| Key | Type | Default |
+|---|---|---|
+| `ribbon.name` | String / HTML | `TEST<br/>({db_name})` |
+| `ribbon.color` | CSS colour | `#f0f0f0` |
+| `ribbon.background.color` | CSS colour | `rgba(255,0,0,.6)` |
+
+### Backend model
+
+The module registers an abstract model `web.environment.ribbon.backend` with a single API method `get_environment_ribbon()`. This method reads the three system parameters and returns them as a dictionary to the frontend OWL component:
+
+```python
+@api.model
+def get_environment_ribbon(self):
+    return {
+        "name": self._prepare_ribbon_name(),   # with {db_name} substituted
+        "color": ...,                           # ribbon.color param
+        "background_color": ...,               # ribbon.background.color param
+    }
+```
+
+The `{db_name}` placeholder is substituted server-side using `self.env.cr.dbname` before the value is sent to the client.
+
+### Frontend component
+
+The ribbon is rendered by an OWL component located at:
+
+```text
+web_environment_ribbon/static/src/components/environment_ribbon/
+```
+
+It is loaded into `web.assets_backend` and mounts itself automatically on every backend page.

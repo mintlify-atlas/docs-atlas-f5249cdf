@@ -1,0 +1,210 @@
+---
+title: 'Web Widget X2Many 2D Matrix'
+description: 'Render an x2many field as an editable 2-dimensional grid where rows, columns, and cell values each map to a field on the related model.'
+---
+
+The `web_widget_x2many_2d_matrix` addon provides the `x2many_2d_matrix` field widget. It renders a One2many or Many2many field as a spreadsheet-style grid: one field drives the columns (X axis), another drives the rows (Y axis), and a third provides the editable cell value. This is ideal when you need to fill in values for every combination of two dimensions (e.g. hours per user per project).
+
+## Installation
+
+```python
+"depends": ["web", "web_widget_x2many_2d_matrix"],
+```
+
+## Basic usage
+
+```xml
+<field name="my_field" widget="x2many_2d_matrix" />
+```
+
+This assumes the related model has fields named `x`, `y`, and `value`. Override the field names with explicit attributes when your model uses different names.
+
+## Widget attributes
+
+| Attribute | Type | Default | Description |
+|---|---|---|---|
+| `field_x_axis` | field name | `x` | Field whose distinct values become the **columns** of the matrix. |
+| `field_y_axis` | field name | `y` | Field whose distinct values become the **rows** of the matrix. |
+| `field_value` | field name | `value` | Field shown in each cell and edited by the user. |
+| `show_row_totals` | boolean | `True` | Show a totals column on the right when `field_value` is numeric. |
+| `show_column_totals` | boolean | `True` | Show a totals row at the bottom when `field_value` is numeric. |
+| `x_axis_clickable` | boolean | `False` | Render X axis headers as links when `field_x_axis` is a Many2one. |
+| `y_axis_clickable` | boolean | `False` | Render Y axis headers as links when `field_y_axis` is a Many2one. |
+
+## The inner `<list>` node
+
+All fields referenced by `field_x_axis`, `field_y_axis`, `field_value`, and any fields used in `domain`, `context`, `readonly`, or `required` expressions on the value field **must** appear inside a nested `<list>` node. This is required for the OWL renderer to load them.
+
+```xml
+<field name="task_ids" widget="x2many_2d_matrix"
+       field_x_axis="project_id"
+       field_y_axis="user_id"
+       field_value="planned_hours">
+    <list>
+        <field name="task_ids" />
+        <field name="project_id" />
+        <field name="user_id" />
+        <field name="planned_hours" />
+    </list>
+</field>
+```
+
+## Value field options
+
+You can pass any attribute to the value field that would be valid in a list view. This includes `options`, `domain`, `context`, `readonly`, and `required`:
+
+```xml
+<field name="country_id"
+       domain="[('name', 'like', 'land')]"
+       options="{'no_create': True}"
+       readonly="login == 'demo'"
+       required="login == 'admin'" />
+```
+
+## Real examples from the demo
+
+The addon ships a demo view on `res.groups` that demonstrates every supported field type as the cell value.
+
+<Tabs>
+  <Tab title="Many2one cell value">
+
+```xml
+<field
+    name="users"
+    widget="x2many_2d_matrix"
+    field_x_axis="login"
+    field_y_axis="partner_id"
+    field_value="country_id"
+>
+    <list>
+        <field name="login" />
+        <field name="partner_id" />
+        <field
+            name="country_id"
+            domain="[('name', 'like', 'land')]"
+            options="{'no_create': True}"
+            readonly="login == 'demo'"
+            required="login == 'admin'"
+        />
+    </list>
+</field>
+```
+
+  </Tab>
+  <Tab title="Char cell value with clickable X axis">
+
+```xml
+<field
+    name="users"
+    widget="x2many_2d_matrix"
+    field_x_axis="country_id"
+    field_y_axis="partner_id"
+    field_value="name"
+    x_axis_clickable="True"
+>
+    <list>
+        <field name="name" required="login == 'admin'" />
+        <field name="partner_id" />
+        <field
+            name="country_id"
+            domain="[('name', 'like', 'land')]"
+            options="{'no_create': True}"
+        />
+    </list>
+</field>
+```
+
+  </Tab>
+  <Tab title="Boolean cell value">
+
+```xml
+<field
+    name="users"
+    widget="x2many_2d_matrix"
+    field_x_axis="country_id"
+    field_y_axis="partner_id"
+    field_value="active"
+>
+    <list>
+        <field name="active" />
+        <field name="partner_id" />
+        <field
+            name="country_id"
+            domain="[('name', 'like', 'land')]"
+            options="{'no_create': True}"
+        />
+    </list>
+</field>
+```
+
+  </Tab>
+  <Tab title="Float with widget override">
+
+```xml
+<field
+    name="users"
+    widget="x2many_2d_matrix"
+    field_x_axis="country_id"
+    field_y_axis="partner_id"
+    field_value="partner_latitude"
+>
+    <list>
+        <field name="partner_latitude" widget="float_time" />
+        <field name="partner_id" />
+        <field
+            name="country_id"
+            domain="[('name', 'like', 'land')]"
+            options="{'no_create': True}"
+        />
+    </list>
+</field>
+```
+
+  </Tab>
+</Tabs>
+
+## Data model pattern
+
+The matrix widget requires the related model to already contain a complete set of `(x, y)` combination records. The typical pattern is to pre-populate the field in a `default` function on a wizard:
+
+```python
+from odoo import fields, models
+
+class PlannedHoursWizard(models.TransientModel):
+    _name = "planned.hours.wizard"
+
+    def _default_task_ids(self):
+        projects = self.env["project.project"].browse([1, 2, 3])
+        users = self.env["res.users"].browse([1, 2, 3])
+        return [
+            (0, 0, {
+                "name": "Planned hours",
+                "project_id": p.id,
+                "user_id": u.id,
+                "planned_hours": 0,
+                "message_needaction": False,
+                "date_deadline": fields.Date.today(),
+            })
+            if not p.task_ids.filtered(lambda x: x.user_id == u) else
+            (4, p.task_ids.filtered(lambda x: x.user_id == u)[0].id)
+            for p in projects
+            for u in users
+        ]
+
+    task_ids = fields.Many2many("project.task", default=_default_task_ids)
+```
+
+<Warning>
+  The widget does not create missing `(x, y)` combinations automatically. If a cell position has no backing record, it will be empty and uneditable. Always ensure the full Cartesian product of X and Y values is present in the dataset before rendering.
+</Warning>
+
+## Supported field types for cell values
+
+The following field types are supported for `field_value`:
+
+- `char`, `text`
+- `integer`, `float`, `monetary`
+- `boolean`
+- `selection`
+- `many2one`
+- Any field type that has a compatible list view widget (widget override supported)

@@ -1,0 +1,190 @@
+---
+title: 'Web Notify'
+description: 'Send live server-side notification messages to users as styled fly-over popups in the Odoo web client.'
+---
+
+The `web_notify` module enables server-side Python code to push instant notification popups to any logged-in user through the Odoo bus (long-polling). Notifications appear as themed fly-over dialogs and support five severity levels, sticky persistence, HTML content, and optional action buttons.
+
+<Note>
+  `web_notify` depends on `web`, `bus`, `base`, and `mail`. It is a technical module designed to be used as a building block for other addons.
+</Note>
+
+## Notification types
+
+Each notification type maps to a distinct Bootstrap-derived theme color in the popup.
+
+| Type | Constant | Default title | Visual style |
+|------|----------|---------------|--------------|
+| `success` | `SUCCESS` | "Success" | Green |
+| `danger` | `DANGER` | "Danger" | Red |
+| `warning` | `WARNING` | "Warning" | Yellow/orange |
+| `info` | `INFO` | "Information" | Blue |
+| `default` | `DEFAULT` | "Default" | Grey/neutral |
+
+## Python API
+
+### Basic usage
+
+Call any of the five helper methods on a `res.users` record. All methods share the same signature.
+
+```python
+# Notify the current user
+self.env.user.notify_success(message="Record saved successfully.")
+self.env.user.notify_danger(message="An error occurred during processing.")
+self.env.user.notify_warning(message="Stock levels are low.")
+self.env.user.notify_info(message="Background job has started.")
+self.env.user.notify_default(message="System check complete.")
+```
+
+### Full method signature
+
+All five methods accept the same keyword arguments:
+
+```python
+self.env.user.notify_success(
+    message="My success message",   # required — body text (str)
+    title="Custom Title",           # optional — overrides the default title
+    sticky=False,                   # optional — keep popup until dismissed (bool)
+    target=None,                    # optional — res.partner recordset to notify
+    html=False,                     # optional — render message as HTML (bool)
+    action=None,                    # optional — ir.actions dict to attach a button
+    params=None,                    # optional — extra params dict
+)
+```
+
+<Warning>
+  Only administrators (`_is_admin()`) or superuser contexts may call `notify_*` on a user other than `self.env.user`. Regular users raising a notification for another user will receive a `UserError`.
+</Warning>
+
+### Notifying a specific partner
+
+Use the `target` parameter to route a notification to one or more partners instead of the calling user. Pass a `res.partner` recordset:
+
+```python
+partner = self.env["res.partner"].browse(partner_id)
+self.env.user.notify_info(
+    message="Your order has been confirmed.",
+    target=partner,
+)
+```
+
+### Notifying multiple users at once
+
+```python
+all_users = self.env["res.users"].search([])
+self.env.user.notify_warning(
+    message="Scheduled maintenance in 5 minutes.",
+    target=all_users.partner_id,
+)
+```
+
+### Sticky notifications
+
+Set `sticky=True` so the popup stays on screen until the user dismisses it manually:
+
+```python
+self.env.user.notify_danger(
+    message="Critical sync failure — please contact support.",
+    sticky=True,
+)
+```
+
+### HTML content
+
+Set `html=True` to render the `message` string as HTML markup:
+
+```python
+self.env.user.notify_info(
+    message="Order <b>#1234</b> is ready for review.",
+    html=True,
+)
+```
+
+### Attaching an action button
+
+Pass a fully resolved `ir.actions.act_window` dict (or any valid Odoo client action). The optional `button_name` and `button_icon` keys inside `action["context"]["params"]` control the button label and Font Awesome icon class:
+
+```python
+action = self.env["ir.actions.act_window"]._for_xml_id("sale.action_orders")
+action.update({
+    "res_id": self.id,
+    "views": [(False, "form")],
+})
+action["context"].setdefault("params", {})
+action["context"]["params"]["button_name"] = "View Order"
+action["context"]["params"]["button_icon"] = "fa-eye"
+
+self.env.user.notify_info(
+    message="Your sale order has been confirmed.",
+    action=action,
+)
+```
+
+When the user clicks the button the action is executed and the notification is automatically dismissed.
+
+## Internal mechanism
+
+Notifications are delivered over the Odoo bus channel. `_notify_channel` serialises a payload and calls `partner._bus_send("web_notify", payload)` for each target partner. The JavaScript service registered under the `"webNotification"` key subscribes to the `"web_notify"` bus topic on page load and calls the Odoo core `notification` service to render the popup.
+
+```
+Python model
+  └─ notify_info(...)
+       └─ _notify_channel(...)
+            └─ partner._bus_send("web_notify", { type, message, title, sticky, html, action, params })
+
+Browser (JS)
+  └─ webNotificationService (bus_service.subscribe "web_notify")
+       └─ notificationService.add(markup(message), { type, title, sticky, buttons })
+```
+
+### Bus payload structure
+
+```json
+{
+  "type": "info",
+  "message": "Your report is ready.",
+  "title": "Information",
+  "sticky": false,
+  "html": false,
+  "action": null,
+  "params": {}
+}
+```
+
+## JavaScript service
+
+The `webNotificationService` is registered in Odoo's service registry at startup. You can import and reference it from other JS modules but it runs automatically — no manual initialisation is required.
+
+```javascript
+// The service is registered automatically; shown here for reference only.
+import { registry } from "@web/core/registry";
+
+// The service name in the registry is "webNotification"
+const webNotification = registry.category("services").get("webNotification");
+```
+
+The service patches `Notification.props` to accept the additional `"default"` and `"danger"` type values that are not present in the standard Odoo notification component:
+
+```javascript
+// Accepted values for the `type` prop
+["warning", "danger", "success", "info", "default"]
+```
+
+## Testing the module
+
+Install the module on a demo database and open **Settings → Users & Companies → Users**. Open any user record; a **Test web notify** tab appears with buttons to trigger each notification type.
+
+<Tip>
+  You can also call `notify_*` methods directly from the Odoo shell (`odoo-bin shell`) to test notification delivery to a live browser session without writing a full test case.
+</Tip>
+
+## Module metadata
+
+| Field | Value |
+|-------|-------|
+| Technical name | `web_notify` |
+| Version | 18.0.1.1.1 |
+| License | LGPL-3 |
+| Author | ACSONE SA/NV, AdaptiveCity, OCA |
+| Dependencies | `web`, `bus`, `base`, `mail` |
+| Development status | Production/Stable |

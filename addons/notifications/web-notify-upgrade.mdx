@@ -1,0 +1,136 @@
+---
+title: 'Web Notify Upgrade'
+description: 'Automatically notify all active users with a live popup when a module is installed or upgraded, prompting them to reload the page.'
+---
+
+`web_notify_upgrade` hooks into the end of Odoo's module installation and upgrade pipeline and sends a sticky `info` popup to every user whose browser session is currently active. The popup contains a **Reload** button so users can immediately pick up the latest UI changes.
+
+<Info>
+  This module depends only on `web_notify`. No other configuration is required — notifications fire automatically after any module install or upgrade.
+</Info>
+
+## What users see
+
+When a module installation or upgrade completes, all active users receive a sticky notification with:
+
+- **Title:** "Upgrade Notification"
+- **Body:** "Your odoo instance has been upgraded, please reload the web page."
+- **Button:** A primary "Reload" button (`fa-refresh` icon) that calls `location.reload(true)` to force a hard page refresh.
+
+The notification is **sticky** — it stays on screen until the user either clicks Reload or dismisses it manually.
+
+## How it works
+
+The module overrides `ir.model.data._process_end`, which Odoo calls at the conclusion of every `--update` or `--install` run when at least one module has changed.
+
+```
+_process_end(modules)
+  └─ super()._process_end(modules)       # standard Odoo processing
+  └─ _notify_active_users_of_upgrade()
+       └─ _get_active_users_to_notify_of_upgrade()
+            └─ SQL query against bus_presence
+       └─ active_users.notify_info(**_get_upgrade_notification_params())
+```
+
+### Detecting active users
+
+Active users are determined by querying the `bus_presence` table. A user is considered active if either:
+
+- Their `last_poll` was within `DISCONNECTION_TIMER` seconds of now, **or**
+- Their `last_presence` was within `AWAY_TIMER` seconds of now.
+
+`DISCONNECTION_TIMER` and `AWAY_TIMER` are the standard Odoo bus presence constants imported from `odoo.addons.bus.models.bus_presence`.
+
+```python
+self.env.cr.execute(
+    """
+    SELECT user_id
+    FROM bus_presence
+    WHERE last_poll is not null
+        AND (
+            age(now() AT TIME ZONE 'UTC', last_poll) < interval %s
+            OR age(now() AT TIME ZONE 'UTC', last_presence) < interval %s
+        )
+    """,
+    (f"{DISCONNECTION_TIMER} seconds", f"{AWAY_TIMER} seconds"),
+)
+```
+
+### Notification payload
+
+```python
+{
+    "message": (
+        "Your odoo instance has been upgraded, please reload the web page."
+        '<br />'
+        '<button onclick="location.reload(true)" class="btn btn-primary mt-4">'
+        '<i class="fa fa-refresh"></i>Reload</button>'
+    ),
+    "title": "Upgrade Notification",
+    "sticky": True,
+}
+```
+
+The `message` field contains inline HTML (the Reload button). `web_notify` renders it correctly because `html=True` is implicitly handled when the message contains HTML tags — the content is passed through `markup()` on the JavaScript side.
+
+<Note>
+  The notification is sent with `notify_info`, which uses the blue `info` theme. The `sticky=True` flag ensures the popup remains visible until the user acts on it.
+</Note>
+
+## Configuration
+
+There is no configuration. The module activates for all module installations and upgrades once it is installed.
+
+<Tip>
+  If you need to customise the notification text or target a different audience, subclass `ir.model.data` and override `_get_upgrade_notification_params` or `_get_active_users_to_notify_of_upgrade` respectively.
+</Tip>
+
+### Extending the notification
+
+```python
+from odoo import _, models
+
+class IrModelData(models.Model):
+    _inherit = "ir.model.data"
+
+    def _get_upgrade_notification_params(self):
+        params = super()._get_upgrade_notification_params()
+        # Replace the body with a custom message
+        params["message"] = _(
+            "A new version of the application is available. "
+            "Please save your work and reload."
+        )
+        return params
+```
+
+## Logging
+
+When active users are found, the module logs an `INFO`-level message:
+
+```
+Installation detected. Notifying 3 active users
+```
+
+If no active users are present at the time of upgrade, nothing is logged and no notifications are sent.
+
+## Model reference
+
+### `ir.model.data` overrides
+
+| Method | Description |
+|--------|-------------|
+| `_process_end(modules)` | Called by Odoo at the end of module processing. Delegates to `super()` then triggers the upgrade notification flow. |
+| `_notify_active_users_of_upgrade()` | Resolves active users and calls `notify_info` on them. Logs the count of notified users. |
+| `_get_active_users_to_notify_of_upgrade()` | Returns a `res.users` recordset of currently active users based on `bus_presence` polling timestamps. |
+| `_get_upgrade_notification_params()` | Returns the `dict` of keyword arguments passed to `notify_info`. Override this to customise the message. |
+
+## Module metadata
+
+| Field | Value |
+|-------|-------|
+| Technical name | `web_notify_upgrade` |
+| Version | 18.0.1.0.0 |
+| License | AGPL-3 |
+| Author | Akretion, OCA |
+| Dependencies | `web_notify` |
+| Development status | Production/Stable |

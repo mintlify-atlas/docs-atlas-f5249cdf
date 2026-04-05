@@ -1,0 +1,106 @@
+---
+title: "Web Company Color"
+description: "Automatically generates navbar and UI colours derived from your company logo, with manual fine-tuning available on the company form."
+---
+
+`web_company_color` analyses your company logo and derives a coordinated colour scheme for the Odoo backend navbar, buttons, and links. The generated SCSS is compiled and stored as a CSS attachment so it loads efficiently on every page request.
+
+## Features
+
+- **Automatic colour extraction** from the company logo using the Rec. 709 luminance formula
+- **Per-company colour scheme** — each company in a multi-company setup can have its own colours
+- **Manual colour overrides** — every generated colour can be adjusted individually on the company form
+- **Live SCSS compilation** — colour changes regenerate a CSS attachment immediately, no server restart needed
+- Supports `base_sparse_field` to store all colour values in a single serialised JSON column
+
+## Installation
+
+Install the module using its technical name:
+
+```text
+web_company_color
+```
+
+**Dependencies:** `web`, `base_sparse_field`  
+**License:** AGPL-3
+
+## Usage
+
+### Computing colours from the logo
+
+<Steps>
+  <Step title="Open the company record">
+    Go to **Settings → Companies** and open your company, or navigate to **Settings → General Settings** and click your company name.
+  </Step>
+  <Step title="Upload a logo">
+    Upload or update the company logo. For best results, use an image with an alpha (transparency) channel — PNG files work well.
+  </Step>
+  <Step title="Compute colours">
+    On the **Company Styles** tab (visible to administrators), click **Compute colors from logo**. The module extracts the dominant colour from the logo and calculates the full colour set automatically.
+  </Step>
+  <Step title="Refresh the page">
+    After saving, refresh your browser. The new colour scheme is applied to the navbar, buttons, and links.
+  </Step>
+</Steps>
+
+<Note>
+  A page refresh is required after changing colours. The generated CSS is served from a cached attachment and will not update until the next page load.
+</Note>
+
+### Manual colour adjustments
+
+On the **Company Styles** tab of the company form, you can override each generated colour individually using colour pickers:
+
+| Field | What it controls |
+|---|---|
+| **Navbar Background Color** | Main navbar background |
+| **Navbar Background Color Hover** | Navbar item background on hover/active |
+| **Navbar Bottom Border Color** | 1 px border below the navbar |
+| **Navbar Text Color** | Text and icon colour in the navbar |
+| **Button Background Color** | Primary button fill |
+| **Button Background Color Hover** | Primary button fill on hover |
+| **Button Text Color** | Text on primary buttons |
+| **Link Text Color** | Hyperlinks and stat button values in forms |
+| **Link Text Color Hover** | Hyperlink colour on hover |
+
+## Colour derivation logic
+
+When you click **Compute colors from logo**, the module:
+
+1. Converts the logo to an RGB image and samples the average pixel colour.
+2. Converts to HLS colour space and reduces lightness by 10% to produce a slightly darker hover colour.
+3. Applies the **Rec. 709 luminance formula** to determine whether black (`#000`) or white (`#fff`) text will have better contrast on the navbar background:
+
+```python
+_a = 1 - (0.2126 * _r + 0.7152 * _g + 0.0722 * _b)
+navbar_text = "#000" if _a < 0.5 else "#fff"
+```
+
+## Generated CSS structure
+
+The compiled CSS is stored as an `ir.attachment` at the URL:
+
+```text
+/web_company_color/static/src/scss/custom_colors.<company_id>.gen.scss
+```
+
+The stylesheet targets the following Odoo selectors:
+
+```scss
+.o_main_navbar { /* background, border, text colours */ }
+.o_menu_brand  { /* app switcher label */ }
+.btn-primary   { /* primary buttons */ }
+.o_searchview .o_searchview_facet .o_searchview_facet_label { /* search chips */ }
+.o_form_view .o_horizontal_separator { /* form section labels */ }
+.o_form_view .oe_button_box .oe_stat_button /* stat buttons */
+.o_menu_sections .o_nav_entry { /* top-level menu items */ }
+```
+
+## Technical notes
+
+- All colour fields are `Char` fields declared as `sparse="company_colors"`, storing values in a single `Serialized` JSON column called `company_colors`.
+- Creating or updating a company record automatically calls `scss_create_or_update_attachment()`, which recompiles and saves the CSS attachment.
+- Deleting a company removes its generated CSS attachment.
+- The `post_init_hook` regenerates CSS attachments for all existing companies on first install.
+- The `uninstall_hook` removes all generated attachments on uninstall.
+- The `ignore_company_color` context key can be set to skip SCSS regeneration during batch operations.

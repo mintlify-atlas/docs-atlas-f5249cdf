@@ -1,0 +1,101 @@
+---
+title: "Custom Shortcut Icon (Favicon)"
+description: "Lets each company upload a custom favicon shown in browser tabs for both backend users and portal users when the website module is not installed."
+---
+
+`web_favicon` adds a `favicon` binary field to the `res.company` model and serves it as the browser shortcut icon (favicon) for all pages — backend and portal alike. It is particularly useful in multi-company setups and for integrators managing several Odoo instances who need to identify browser tabs at a glance.
+
+## Features
+
+- Per-company favicon — each company can have a distinct icon
+- Shown to portal users even when the `website` module is not installed
+- Default favicon is Odoo's built-in icon, modified with a random coloured bar on the bottom row of pixels so different companies are visually distinct out of the box
+- Cache-busted via a SHA-512 hash of the company's `write_date`
+- Direct refresh URL available at `/web_favicon/favicon`
+
+## Installation
+
+Install the module using its technical name:
+
+```text
+web_favicon
+```
+
+**Dependencies:** `web`  
+**License:** AGPL-3
+
+## Configuration
+
+<Steps>
+  <Step title="Open the company form">
+    Go to **Settings → Companies** and open the company whose favicon you want to change. You must be a member of the **Administration / Settings** group.
+  </Step>
+  <Step title="Upload the favicon">
+    In the company form, locate the **Company Favicon** image field (displayed near the colour field, visible to technical/administrator users). Click the field and upload your icon file.
+  </Step>
+  <Step title="Save the record">
+    Save the company record. The new favicon is served immediately on the next page load.
+  </Step>
+  <Step title="Clear the browser cache">
+    Most browsers cache favicons aggressively. You may need to clear your browser cache or hard-reload (`Ctrl + Shift + R`) to see the new icon. Alternatively, navigate directly to `/web_favicon/favicon` in your browser to force a refresh.
+  </Step>
+</Steps>
+
+### Recommended file formats and sizes
+
+| Format | Notes |
+|---|---|
+| `.ico` | Best browser compatibility. Supports embedded 16×16, 32×32, and 64×64 sizes. |
+| `.png` | 16×16, 32×32, or 64×64 pixels. Most modern browsers accept PNG favicons. |
+| `.gif` | Supported but animated GIFs may not animate as favicons in all browsers. |
+
+<Info>
+  A template SVG is provided at `web_favicon/static/src/img/master_original_favicon.svg` that you can use as a starting point for creating your own icon. You can also use any online favicon generator.
+</Info>
+
+Higher resolutions and colour depths are supported by most modern browsers, but the exact support depends on the browser version.
+
+## Technical details
+
+### Model field
+
+The `favicon` field is a `Binary` field on `res.company`:
+
+```python
+favicon = fields.Binary(
+    string="Company Favicon",
+    help="This field holds the image used to display favicon for a given company.",
+    default=_get_default_favicon,
+)
+```
+
+New companies receive a default favicon automatically on creation.
+
+### Default favicon generation
+
+The default favicon is Odoo's built-in icon (`web/static/img/favicon.ico`) with a 1-pixel-tall coloured bar overlaid on the bottom row. The bar colour is chosen randomly (RGB components in the range 32–224 in steps of 24), making it easy to visually distinguish multiple companies without any manual configuration.
+
+### Favicon URL and cache busting
+
+The favicon URL is constructed as:
+
+```text
+/web/image/res.company/<company_id>/favicon?unique=<7_char_sha512>
+```
+
+The `unique` parameter is derived from the first 7 characters of a SHA-512 hash of the company's `write_date`, so the URL changes automatically whenever the favicon is updated.
+
+### Multi-company and portal support
+
+The active favicon is determined from the `cids` cookie set by Odoo's multi-company switcher. When a `website_id` context is present, the website's own favicon takes precedence. For portal users accessing Odoo without the `website` module, the company favicon is served from the same field.
+
+### Access control
+
+The favicon field is rendered in the company form view only for users in the `base.group_no_one` (technical) group:
+
+```xml
+<field name="favicon" widget="image" class="float-start oe_avatar"
+       groups="base.group_no_one" />
+```
+
+To allow non-technical administrators to upload a favicon, you can create an inherited view that removes this group restriction.

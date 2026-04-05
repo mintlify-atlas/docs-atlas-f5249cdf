@@ -1,0 +1,179 @@
+---
+title: 'Web Session Auto Close'
+description: 'Automatically log out inactive users after a configurable inactivity timeout, protecting unattended Odoo sessions.'
+---
+
+`web_session_auto_close` monitors user interaction in the browser and destroys the Odoo session when the user has been inactive for longer than a configurable timeout. On expiry the session is invalidated server-side and the page reloads, returning the user to the login screen.
+
+<Info>
+  This module depends only on `web`. It has no dependency on `web_notify` or `bus`.
+</Info>
+
+## Configuration
+
+<Steps>
+  <Step title="Open Settings">
+    Navigate to **Settings** in the Odoo backend menu.
+  </Step>
+  <Step title="Locate the timeout field">
+    Under the **General** section, find the **Session Auto-Close Timeout (seconds)** field inside the **Users** settings block.
+  </Step>
+  <Step title="Set the timeout">
+    Enter the desired inactivity duration in **seconds**. The default value is **600 seconds (10 minutes)**. Set to `0` or leave blank to use the default.
+  </Step>
+  <Step title="Save">
+    Click **Save**. The new timeout takes effect immediately for all users on their next activity event; active browser tabs will pick it up after the next inactivity check.
+  </Step>
+</Steps>
+
+### System parameter
+
+The timeout is stored as a system parameter and can also be set directly:
+
+| Parameter key | Type | Default | Unit |
+|---------------|------|---------|------|
+| `web_session_auto_close.timeout` | integer | `600` | seconds |
+
+The JavaScript client fetches this value at startup via a JSON-RPC call to `/web/session/get_timeout`. The controller converts the value to milliseconds before returning it to the browser:
+
+```python
+# Controller: /web/session/get_timeout
+return int(timeout_sec) * 1000   # returns milliseconds to JavaScript
+```
+
+## How inactivity is detected
+
+The JavaScript module (`session_auto_close.esm.js`) runs as an Odoo service on every backend page load. It uses `localStorage` to persist the last interaction timestamp so the timer survives page navigations and refreshes within the same browser.
+
+### Activity events tracked
+
+| Event | Element |
+|-------|---------|
+| `mousemove` | `window` |
+| `keydown` | `window` |
+
+Any `mousemove` or `keydown` event updates `lastActivityTime` in `localStorage` with the current timestamp.
+
+### Inactivity check interval
+
+The module calls `checkInactivity` on a `setInterval` timer set to **half the configured timeout**. For the default 600-second (10-minute) timeout the check fires every 300 seconds (5 minutes), so in the worst case the session is closed within one check interval past the actual timeout.
+
+```
+SESSION_TIMEOUT = 600 000 ms  (from server)
+checkInterval   = 300 000 ms  (SESSION_TIMEOUT / 2)
+```
+
+### Startup behaviour
+
+When the page loads, the module immediately checks for a pre-existing `lastActivityTime` key in `localStorage`. If found and the elapsed time already exceeds the timeout (e.g., the browser was left open overnight), the session is destroyed **before** attaching any event listeners.
+
+## Session destruction sequence
+
+When inactivity is detected the following steps occur:
+
+<Steps>
+  <Step title="RPC to destroy session">
+    The JavaScript client calls `rpc("/web/session/destroy", {})` — the standard Odoo session destroy endpoint.
+  </Step>
+  <Step title="Clear localStorage">
+    The `lastActivityTime` key is removed from `localStorage` so subsequent page loads start with a fresh timer.
+  </Step>
+  <Step title="Page reload">
+    `window.location.reload()` is called. Because the session cookie is now invalid, Odoo redirects the user to the login page.
+  </Step>
+</Steps>
+
+## JavaScript internals
+
+```javascript
+// Fetch timeout from server (seconds → milliseconds)
+rpc("/web/session/get_timeout", {}).then((timeout) => {
+    SESSION_TIMEOUT = parseInt(timeout, 10) || 600000;
+    startSessionAutoClose();
+});
+
+function startSessionAutoClose() {
+    // Check immediately if leftover timestamp exists
+    if (localStorage.getItem("lastActivityTime")) {
+        checkInactivity();
+    }
+
+    // Track interactions
+    window.addEventListener("mousemove", updateActivityTime);
+    window.addEventListener("keydown", updateActivityTime);
+
+    // Set initial timestamp and start periodic check
+    updateActivityTime();
+    setInterval(checkInactivity, SESSION_TIMEOUT / 2);
+}
+
+function checkInactivity() {
+    if (Date.now() - getLastActivityTime() >= SESSION_TIMEOUT) {
+        closeSession();
+    }
+}
+
+function closeSession() {
+    rpc("/web/session/destroy", {}).then(() => {
+        localStorage.removeItem("lastActivityTime");
+        window.location.reload();
+    });
+}
+```
+
+<Warning>
+  The inactivity timer is **per browser tab** but the `lastActivityTime` value is shared across tabs in the same browser origin via `localStorage`. Activity in any tab resets the timer for all tabs. Closing all tabs without logging out will leave the timestamp in `localStorage`; the next page load will immediately check the elapsed time and may destroy the session on open.
+</Warning>
+
+## Settings view reference
+
+The field is injected into the existing `base_setup.res_config_settings_view_form` view inside the `users_setting_container` block:
+
+```xml
+<xpath expr="//block[@name='users_setting_container']" position="inside">
+    <setting id="invite_users_setting">
+        <field name="session_auto_close_timeout" />
+    </setting>
+</xpath>
+```
+
+The underlying `res.config.settings` field:
+
+```python
+session_auto_close_timeout = fields.Integer(
+    string="Session Auto-Close Timeout (seconds)",
+    config_parameter="web_session_auto_close.timeout",
+    default=600,
+)
+```
+
+## Common scenarios
+
+<AccordionGroup>
+  <Accordion title="Disabling auto-close">
+    There is no explicit on/off toggle. Set the timeout to a very large value (e.g., `86400` for 24 hours) to effectively disable it. Setting it to `0` falls back to the hardcoded JavaScript default of `600 000 ms` (10 minutes).
+  </Accordion>
+
+  <Accordion title="Kiosk or shared terminal deployments">
+    Set a short timeout (e.g., `120` seconds) for shared workstations where users frequently walk away without logging out. The session will be destroyed automatically, protecting access to sensitive data.
+  </Accordion>
+
+  <Accordion title="Why does my session close sooner than expected?">
+    The `lastActivityTime` key in `localStorage` is shared across all tabs at the same origin. If another tab has not had any interaction recently, it may have written an older timestamp. Check browser dev tools → Application → Local Storage for the current value.
+  </Accordion>
+
+  <Accordion title="Does auto-close work on the login page?">
+    The `session_auto_close.esm.js` file is loaded as part of `web.assets_backend`. It runs only in authenticated backend sessions. Unauthenticated pages (the login screen) are not affected.
+  </Accordion>
+</AccordionGroup>
+
+## Module metadata
+
+| Field | Value |
+|-------|-------|
+| Technical name | `web_session_auto_close` |
+| Version | 18.0.1.0.1 |
+| License | AGPL-3 |
+| Author | ACSONE SA/NV, OCA |
+| Dependencies | `web` |
+| Development status | Production/Stable |

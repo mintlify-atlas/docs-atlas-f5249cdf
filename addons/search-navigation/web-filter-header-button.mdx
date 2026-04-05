@@ -1,0 +1,164 @@
+---
+title: 'Filter header buttons'
+description: 'Surface selected search filters as toggle buttons in the view control panel header, designed for fast one-tap access on touch screens and desktops alike.'
+---
+
+The `web_filter_header_button` addon promotes any search filter, group-by, or favourite into a persistent toggle button displayed directly in the control panel header — beneath the search bar. Clicking the button activates or deactivates the filter without opening the search dropdown. A funnel icon (fa-filter) in the header controls visibility of the button row, and the visibility preference is stored per-user and per-action in `localStorage`.
+
+<Info>
+This addon was developed to ease filter access for touch-screen users, where opening the search dropdown and scrolling to a filter can be cumbersome.
+</Info>
+
+## How it looks
+
+When one or more filters are configured with `shown_in_panel`, a funnel button appears to the right of the action buttons in the control panel. Clicking the funnel expands or collapses the filter button strip beneath the main toolbar:
+
+- Each button reflects the filter's current active state (filled vs outline style).
+- A **× reset** button at the left of the strip clears all active search terms at once.
+- Button colours follow the filter type: **blue** for filters, **yellow** for favourites, **teal** for group-by.
+
+A demo is included in the `Apps` view when demo data is loaded (filters: Installed, Not Installed, and Group by State).
+
+## Configuring a filter button
+
+Add `shown_in_panel` to the `context` attribute of any `<filter>` element in a search view:
+
+<Tabs>
+  <Tab title="Name only (default)">
+    The filter's own `string` attribute is used as the button label.
+
+    ```xml
+    <filter
+        string="My filter"
+        name="my_filter"
+        domain="[('active', '!=', False)]"
+        context="{'shown_in_panel': True}"
+    />
+    ```
+  </Tab>
+  <Tab title="Custom name and icon">
+    Pass an object to override the label and add a Font Awesome icon.
+
+    ```python
+    context="{'shown_in_panel': {'icon': 'fa-thumbs-up', 'name': 'Ok'}}"
+    ```
+  </Tab>
+  <Tab title="Icon only">
+    Set `name` to an empty string to show only the icon with no text label.
+
+    ```python
+    context="{'shown_in_panel': {'icon': 'fa-thumbs-up', 'name': ''}}"
+    ```
+  </Tab>
+  <Tab title="With hotkey">
+    Add a `hotkey` property to make the button keyboard-accessible via Alt+key (Odoo hotkey convention).
+
+    ```python
+    context="{'shown_in_panel': {'icon': 'fa-thumbs-up', 'hotkey': 'F'}}"
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+You can promote **filters**, **group-by items**, and **favourites** to header buttons — any search item type except `field` type (field-type items require typed input and are not suitable as toggles).
+</Note>
+
+## Group-by filters as buttons
+
+Group-by items carry a `group_by` key in their context, which Odoo's `SearchArchParser` normally strips. The addon patches `SearchArchParser.visitFilter` to preserve the context when `shown_in_panel` is also present:
+
+```javascript
+// search_arch_parser_patch.esm.js
+visitFilter(node) {
+    var context_to_keep = false;
+    if (node.hasAttribute("context")) {
+        const context = makeContext([node.getAttribute("context")]);
+        if (context.group_by && context.shown_in_panel) {
+            context_to_keep = context;
+        }
+    }
+    super.visitFilter(...arguments);
+    if (context_to_keep) {
+        this.currentGroup.at(-1).context = context_to_keep;
+    }
+},
+```
+
+## Demo: Apps view
+
+The included demo data adds three header buttons to the built-in **Apps** search view:
+
+```xml
+<!-- demo/ir_module_module_view.xml -->
+<filter name="installed">
+    <attribute name="context">
+        {'shown_in_panel': {'icon': 'fa-toggle-on', 'hotkey': 'i'}}
+    </attribute>
+</filter>
+<filter name="not_installed">
+    <attribute name="context">
+        {'shown_in_panel': {'icon': 'fa-toggle-off', 'hotkey': 'u'}}
+    </attribute>
+</filter>
+<filter name="state">
+    <!-- group-by filter -->
+    <attribute name="context">
+        {'group_by':'state', 'shown_in_panel': {'icon': 'fa-th-list', 'hotkey': 's'}}
+    </attribute>
+</filter>
+```
+
+## Technical details
+
+<AccordionGroup>
+  <Accordion title="Visibility persistence">
+    The expanded/collapsed state of the button strip is stored in `localStorage` under the key `visibleHeaderButtons{actionId}+{userId}`. This means each user's preference is remembered independently, per action, across page reloads.
+
+    ```javascript
+    this.buttonFiltersVisibilityKey =
+        `visibleHeaderButtons${this.env.config.actionId}+${user.userId}`;
+    ```
+  </Accordion>
+  <Accordion title="Filter discovery">
+    `SearchModel.getHeaderButtonFilters()` scans all current search items, keeps those with `shown_in_panel` in their context, and excludes `field`-type items:
+
+    ```javascript
+    getHeaderButtonFilters() {
+        return Object.values(this.getSearchItems())
+            .filter((f) => {
+                return (
+                    f.type !== "field" &&
+                    f.context &&
+                    makeContext([f.context]).shown_in_panel
+                );
+            })
+            .map((f) => ({ ...f, context: makeContext([f.context]) }));
+    },
+    ```
+  </Accordion>
+  <Accordion title="Preventing shown_in_panel from being saved to favourites">
+    When a user saves the current search as a favourite, the `shown_in_panel` key is stripped from the context before the `ir.filters` record is written, to avoid polluting saved filters with a UI-only property:
+
+    ```javascript
+    _getIrFilterDescription() {
+        const { preFavorite, irFilter } = super._getIrFilterDescription(...arguments);
+        if (preFavorite?.context) {
+            delete preFavorite.context.shown_in_panel;
+        }
+        return { preFavorite, irFilter };
+    },
+    ```
+  </Accordion>
+  <Accordion title="Rendering">
+    The `FilterButton` OWL component renders inside a `<Transition>` (fade animation) injected below `o_control_panel_main`. The button strip is not rendered at all on form views (`viewType !== 'form'` guard).
+  </Accordion>
+</AccordionGroup>
+
+## Installation
+
+```python
+# __manifest__.py
+"depends": ["web"],
+```
+
+No extra configuration is required beyond marking the desired filters with `shown_in_panel`.

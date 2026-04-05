@@ -1,0 +1,72 @@
+---
+title: "Web Sort Menu"
+description: "Automatically sort apps in the Odoo dropdown and navbar menus into alphabetical order based on the active language."
+---
+
+The `web_sort_menu` addon sorts the applications displayed in the Odoo home dropdown and (when `web_responsive` is installed) the top navbar menu into alphabetical order. Sorting respects the locale of the logged-in user, so accented characters and language-specific collation rules are handled correctly.
+
+## What changes after installation
+
+<CardGroup>
+  <Card title="App drawer / dropdown" icon="grid-2x2">
+    Apps listed in the home menu dropdown are sorted A–Z using the app name in the user's active language.
+  </Card>
+  <Card title="Navbar menu" icon="layout-navbar">
+    When `web_responsive` is also installed, the top navigation bar app entries are sorted in the same alphabetical order.
+  </Card>
+</CardGroup>
+
+<Note>
+Navbar sorting requires the `web_responsive` module. The dropdown sorting works with the base `web` module alone.
+</Note>
+
+## Installation
+
+The module depends only on the core `web` module:
+
+```python
+# __manifest__.py
+"depends": ["web"],
+```
+
+No configuration is required. Install the module and the menus are sorted automatically for all users on their next page load.
+
+## How it works
+
+The addon patches `NavBar` with a `sortApps` method that uses the JavaScript `localeCompare` API for locale-aware ordering:
+
+```javascript
+// static/src/js/sort_app_menu.esm.js
+patch(NavBar.prototype, {
+    sortApps: (apps) => {
+        return apps.sort((a, b) => a.name.localeCompare(b.name));
+    },
+});
+```
+
+The QWeb template then applies `sortApps` to the resolved apps list before rendering the navbar, replacing the original unsorted array in-place:
+
+```xml
+<!-- static/src/xml/sort_app_menu.xml -->
+<t t-name="web_sort_menu.sortMenu" t-inherit="web.NavBar" t-inherit-mode="extension">
+    <xpath expr="//header[hasclass('o_navbar')]//t[@t-set='apps']" position="after">
+        <t t-set="apps" t-value="sortApps(apps)" />
+    </xpath>
+</t>
+```
+
+Because `localeCompare` is used without an explicit locale argument, it picks up the browser's locale automatically. This means a French user sees accented app names sorted correctly according to French collation rules without any extra setup.
+
+## Behaviour details
+
+<AccordionGroup>
+  <Accordion title="Sorting is client-side only">
+    The sort happens in the browser immediately after the app list is fetched. No server-side changes are made to menu sequence numbers, so existing customisations to the menu order are not overwritten in the database.
+  </Accordion>
+  <Accordion title="Locale-aware collation">
+    `String.prototype.localeCompare` honours the user's browser locale. Apps with names in languages that use non-ASCII characters (French, German, Spanish, etc.) are ordered correctly without extra configuration.
+  </Accordion>
+  <Accordion title="web_responsive dependency for navbar">
+    The navbar app list is only present in the DOM when `web_responsive` is installed. Without it, only the home-menu dropdown benefits from alphabetical sorting.
+  </Accordion>
+</AccordionGroup>

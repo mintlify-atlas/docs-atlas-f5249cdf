@@ -1,0 +1,164 @@
+---
+title: 'Quick Start Screen'
+description: 'Give users a configurable launch screen that surfaces their most-used actions as large kanban cards, reducing the number of clicks needed to reach everyday tasks.'
+---
+
+The `web_quick_start_screen` addon adds a configurable kanban screen that users land on after login. Each card on the screen maps to an Odoo action (window action, server action, URL action, report, or client action). Admins can build multiple screens and assign one to each user, or configure a shared screen for groups of users.
+
+<Info>
+This addon was built to reduce the number of clicks for users who perform the same actions repeatedly every day. Rather than navigating through app menus, they arrive directly at a screen showing their most relevant entry points.
+</Info>
+
+## How it works at a glance
+
+<CardGroup>
+  <Card title="Screen actions" icon="bolt">
+    Individual action cards — each with a name, description, icon, and an Odoo action reference. Ordered by a drag-and-drop sequence handle.
+  </Card>
+  <Card title="Quick start screens" icon="layout-grid">
+    Named collections of screen actions. A screen is what gets assigned to a user.
+  </Card>
+  <Card title="User assignment" icon="user">
+    Each user can have their own quick start screen. Optionally set the user's default home action to the start screen so they land on it at every login.
+  </Card>
+</CardGroup>
+
+## Setup walkthrough
+
+<Steps>
+  <Step title="Create screen actions">
+    Go to **Settings → Technical → User Interface → Quick Start Screen Actions**.
+
+    For each action card you want on the screen, create a record with:
+
+    | Field | Description |
+    |---|---|
+    | **Name** | The card title (translatable). |
+    | **Action** | Any Odoo action — `ir.actions.act_window`, `ir.actions.server`, `ir.actions.act_url`, `ir.actions.report`, or `ir.actions.client`. |
+    | **Description** | HTML description shown below the title on the card. |
+    | **Font Awesome icon** | Icon class without the `fa-` prefix (e.g. `fa-truck`). Used when no image is uploaded. |
+    | **Color** | Integer colour index (same palette as kanban card colours). |
+    | **Image** | Upload a custom image (max 128 × 128 px) instead of an icon. |
+    | **Domain** *(optional, admin only)* | Extra domain applied when the action opens. Supports `ref('<xml_id>')`, `datetime`, and `context_today`. |
+    | **Context** *(optional, admin only)* | Extra context merged into the action's own context. Same dynamic helpers as Domain. |
+
+    <Tip>
+    Use `ref('<xml_id>')` in the Domain or Context fields to resolve a record ID at runtime — for example, to pre-filter a window action to a specific team or company.
+    </Tip>
+  </Step>
+
+  <Step title="Create a quick start screen">
+    Go to **Settings → Technical → User Interface → Quick Start Screens**.
+
+    Create a screen with a descriptive name and link the screen actions you created in the previous step. The order of the actions in the screen's list determines card order.
+
+    You can preview the screen directly from the list view by clicking the flash (⚡) button on a row.
+  </Step>
+
+  <Step title="Assign the screen to a user">
+    Go to **Settings → Users & Companies → Users** and open a user's form.
+
+    In the **Preferences** tab, **Menus customization** section:
+
+    - Set **Quick start screen** to the screen you created.
+    - Optionally set **Home Action** to **Quick Start Screen** so the user always lands on this screen after login.
+  </Step>
+
+  <Step title="Enable the Quick Start Screen menu group (optional)">
+    To give the user direct access to the start screen from the app switcher:
+
+    1. Open the user form **with debug mode active**.
+    2. In the **Technical** groups section, enable **Quick Start Screen**.
+
+    This adds a **Start** app icon to their home screen that links directly to their configured start screen.
+  </Step>
+</Steps>
+
+## Models reference
+
+### `quick.start.screen.action`
+
+Represents a single card on the start screen.
+
+```python
+class QuickStartScreenAction(models.Model):
+    _name = "quick.start.screen.action"
+    _order = "sequence, id"
+
+    sequence      = fields.Integer()
+    name          = fields.Char(required=True, translate=True)
+    description   = fields.Html(translate=True)
+    action_ref_id = fields.Reference(selection=[
+        ("ir.actions.report",     "Report"),
+        ("ir.actions.act_window", "Window action"),
+        ("ir.actions.act_url",    "URL action"),
+        ("ir.actions.server",     "Server action"),
+        ("ir.actions.client",     "Client action"),
+    ], required=True)
+    image         = fields.Image(max_width=128, max_height=128)
+    icon_name     = fields.Char()   # e.g. "fa-truck"
+    color         = fields.Integer()
+    domain        = fields.Char()
+    context       = fields.Char()
+```
+
+### `quick.start.screen`
+
+A named collection of screen actions assigned to users.
+
+```python
+class QuickStartScreen(models.Model):
+    _name = "quick.start.screen"
+
+    name       = fields.Char(translate=True)
+    action_ids = fields.Many2many(comodel_name="quick.start.screen.action")
+```
+
+### `res.users` extension
+
+```python
+class ResUsers(models.Model):
+    _inherit = "res.users"
+
+    quick_start_screen_id = fields.Many2one(comodel_name="quick.start.screen")
+```
+
+## Access control
+
+The start screen menu item and the `action_screen_actions` server action are restricted to users in the **Quick Start Screen** security group (`web_quick_start_screen.group_quick_start_screen`). Users outside this group can still have a `quick_start_screen_id` assigned; they just won't have the dedicated menu entry.
+
+Action visibility is computed per-user: `_visible_action_ids()` checks `ir.model.access` for the model referenced by each action, ensuring users only see cards for actions they can read.
+
+## Demo data
+
+When demo data is installed, a **Demo start screen** is created with two cards (Contacts and Configure screen actions) and assigned to the demo user with the start screen set as their home action. You can explore it by logging in as the demo user.
+
+## Technical notes
+
+<AccordionGroup>
+  <Accordion title="Custom kanban view class">
+    The start screen uses a dedicated OWL view class registered as `quick_start_screen` in the views registry. It extends the standard kanban view with a stripped-down control panel (no search bar or group-by controls) so the screen feels like a launcher rather than a data list.
+
+    ```javascript
+    export const quickStartScreenView = {
+        ...kanbanView,
+        ControlPanel: QuickStartScreenControlPanel,
+    };
+    registry.category("views").add("quick_start_screen", quickStartScreenView);
+    ```
+  </Accordion>
+  <Accordion title="Dynamic context and domain evaluation">
+    Domain and context fields on `quick.start.screen.action` are evaluated with `safe_eval`, providing `ref`, `datetime`, and `context_today` helpers — the same helpers available in `ir.filters`. This lets you write expressions like:
+
+    ```python
+    # Domain: filter to records created today
+    "[('create_date', '>=', context_today().strftime('%Y-%m-%d'))]"
+
+    # Context: open a specific warehouse
+    "{'default_warehouse_id': ref('stock.warehouse0')}"
+    ```
+  </Accordion>
+  <Accordion title="Caching of visible action IDs">
+    `_visible_action_ids()` is cached with `@tools.ormcache("frozenset(self.env.user.groups_id.ids)")`. The cache is invalidated automatically when group membership changes, so access rights are always respected without per-request database queries.
+  </Accordion>
+</AccordionGroup>

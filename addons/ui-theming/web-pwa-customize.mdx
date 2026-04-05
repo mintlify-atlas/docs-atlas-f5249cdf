@@ -1,0 +1,133 @@
+---
+title: "Web PWA Customize"
+description: "Configure the Progressive Web App manifest — short name, background colour, theme colour, and icon — directly from Odoo General Settings."
+---
+
+`web_pwa_customize` exposes the PWA web app manifest fields that Odoo CE does not make configurable out of the box. Once installed, a **Progressive Web App** section appears in General Settings where you can set all the values that control how Odoo appears when installed as a PWA on a mobile or desktop device.
+
+<Note>
+  This module maintains compatibility with the configuration data originally defined in `web_pwa_oca` for Odoo 16.0, ensuring a smooth upgrade path for existing installations.
+</Note>
+
+## Features
+
+- Set a custom **short name** for the installed app (shown under the app icon on home screens)
+- Choose the **background colour** used on the PWA splash screen
+- Choose the **theme colour** used for the browser chrome when the app is open
+- Upload a custom **app icon** (SVG or PNG, minimum 512×512 for PNG)
+- Icons are automatically resized to standard PWA sizes (128×128 through 512×512)
+- All settings stored as `ir.config_parameter` system parameters for easy backup and migration
+
+## Installation
+
+Install the module using its technical name:
+
+```text
+web_pwa_customize
+```
+
+**Dependencies:** `web`  
+**License:** AGPL-3
+
+## Configuration
+
+<Steps>
+  <Step title="Open General Settings">
+    Navigate to **Settings → General Settings**.
+  </Step>
+  <Step title="Locate the Progressive Web App section">
+    Scroll to the **Progressive Web App** section. The fields added by this module appear inside the existing PWA block.
+  </Step>
+  <Step title="Configure the fields">
+    Fill in the fields described below, then click **Save**.
+  </Step>
+</Steps>
+
+### PWA settings fields
+
+| Field | Config parameter | Default | Description |
+|---|---|---|---|
+| **Web App Short Name** | `pwa.manifest.short_name` | *(empty)* | The short name shown under the app icon on the device home screen. Falls back to `Odoo` if left blank. |
+| **Background Color** | `pwa.manifest.background_color` | `#714B67` | The background colour of the splash screen displayed while the PWA is loading. Enter any valid CSS hex colour. |
+| **Theme Color** | `pwa.manifest.theme_color` | `#714B67` | The colour applied to the browser address bar and OS chrome when the PWA is open in standalone mode. |
+| **Icon** | *(stored as `ir.attachment`)* | *(none)* | The app icon displayed on the device home screen and in the OS app switcher. |
+
+### Icon requirements
+
+<Tabs>
+  <Tab title="PNG icons">
+    - Minimum size: **512×512 pixels**
+    - Maximum file size: **2 MB**
+    - The module automatically generates resized copies at: 128×128, 144×144, 152×152, 192×192, 256×256, and 512×512 px
+    - Files smaller than 512×512 are rejected with a validation error
+  </Tab>
+  <Tab title="SVG icons">
+    - No minimum size requirement
+    - Maximum file size: **2 MB**
+    - A single SVG file is stored without resizing — browsers scale it automatically
+    - Recommended when you need a perfectly crisp icon at any resolution
+  </Tab>
+</Tabs>
+
+<Warning>
+  Only PNG and SVG files are accepted. Uploading any other image format (JPEG, WebP, GIF, etc.) will raise a validation error. The MIME type is detected from the file content, not just the file extension.
+</Warning>
+
+## Technical details
+
+### Settings model
+
+The configuration is implemented as fields on `res.config.settings` (a transient model):
+
+```python
+pwa_short_name = fields.Char(
+    "Web App Short Name",
+    config_parameter="pwa.manifest.short_name",
+)
+pwa_background_color = fields.Char(
+    "Background Color",
+    config_parameter="pwa.manifest.background_color",
+)
+pwa_theme_color = fields.Char(
+    "Theme Color",
+    config_parameter="pwa.manifest.theme_color",
+)
+pwa_icon = fields.Binary("Icon", readonly=False)
+```
+
+`pwa_short_name`, `pwa_background_color`, and `pwa_theme_color` are persisted as `ir.config_parameter` records. `pwa_icon` is stored as one or more `ir.attachment` records.
+
+### Icon storage
+
+Icons are stored in `ir.attachment` at URLs matching the pattern:
+
+```text
+/web_pwa_customize/icon.<extension>
+/web_pwa_customize/icon<width>x<height>.<extension>
+```
+
+For example, a PNG icon generates:
+
+```text
+/web_pwa_customize/icon.png          (original)
+/web_pwa_customize/icon128x128.png
+/web_pwa_customize/icon144x144.png
+/web_pwa_customize/icon152x152.png
+/web_pwa_customize/icon192x192.png
+/web_pwa_customize/icon256x256.png
+/web_pwa_customize/icon512x512.png
+```
+
+When settings are saved with a new icon, all previous icon attachments are deleted before the new ones are created.
+
+### Manifest integration
+
+The module's controller reads the stored `ir.config_parameter` values and `ir.attachment` icon URLs and injects them into the PWA manifest JSON served at Odoo's standard manifest endpoint, overriding the default values supplied by the `web` module.
+
+### System parameters written
+
+| Parameter key | Written by |
+|---|---|
+| `pwa.manifest.short_name` | `res.config.settings.set_values()` |
+| `pwa.manifest.background_color` | `res.config.settings.set_values()` |
+| `pwa.manifest.theme_color` | `res.config.settings.set_values()` |

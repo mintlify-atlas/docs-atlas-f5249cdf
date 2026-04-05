@@ -1,0 +1,178 @@
+---
+title: 'Colorize fields in tree views'
+description: 'Dynamically color cell backgrounds and text in Odoo list views based on record data, using Python-like expressions in field options.'
+---
+
+This addon lets you apply background and foreground colors to individual columns in Odoo list (tree) views. Colors are driven by expressions evaluated against each record's data, so different rows can show different colors without any custom Python code.
+
+## How it works
+
+The module patches Odoo's `ListRenderer` to evaluate `bg_color` and `fg_color` options declared on `<field>` elements inside a `<tree>` view. For every rendered cell, the expressions are tested in order; the last one that evaluates to `True` wins. Colors are applied as inline CSS `background-color` and `color` styles.
+
+<Info>
+  Expression evaluation uses Odoo's `evaluateBooleanExpr` (powered by `py.js`), so the syntax is a Python-compatible boolean expression that can reference any field on the record.
+</Info>
+
+## Installation
+
+Install the `web_tree_dynamic_colored_field` module from the OCA Web repository. It has no dependencies beyond the `web` module.
+
+## Configuration
+
+No server-side configuration is required. Color rules are declared directly in the XML view definition using the `options` attribute on `<field>` tags inside a `<tree>` view.
+
+## Usage
+
+### Background color (`bg_color`)
+
+Add `bg_color` to a field's `options` to highlight the cell's background when a condition is met.
+
+```xml
+<field name="arch" type="xml">
+    <tree string="Customers">
+        <field name="name" options='{"bg_color": "red: customer_rank > 0"}'/>
+        <field name="email"/>
+    </tree>
+</field>
+```
+
+The value follows the format `color: expression`. When `expression` evaluates to `True` for a record, the cell is rendered with that background color.
+
+### Foreground (text) color (`fg_color`)
+
+Use `fg_color` to change the text color of a cell.
+
+```xml
+<field name="arch" type="xml">
+    <tree string="Customers">
+        <field name="name" options='{"fg_color": "white: customer_rank > 0"}'/>
+    </tree>
+</field>
+```
+
+### Combining background and foreground colors
+
+Both options can be set on the same field simultaneously.
+
+```xml
+<field name="arch" type="xml">
+    <tree string="Users">
+        <field name="login_date" options='{
+            "bg_color": "#9e1635: login_date == False",
+            "fg_color": "white: login_date == False"
+        }'/>
+    </tree>
+</field>
+```
+
+### Multiple color rules with `;`
+
+Separate multiple `color: expression` pairs with a semicolon. Rules are evaluated left-to-right; the **last matching** rule wins, so more specific conditions should come later.
+
+```xml
+<field name="name" options='{
+    "fg_color": "red: red_color == True; green: green_color == True"
+}'/>
+```
+
+```xml
+<field name="state" options='{
+    "bg_color": "yellow: state == \"draft\"; green: state == \"done\"; red: state == \"cancel\""
+}'/>
+```
+
+### Bare color (no condition)
+
+If you omit the `: expression` part, the color is applied unconditionally to every row. This is useful when combined with other rules to set a default.
+
+```xml
+<field name="name" options='{
+    "bg_color": "blue; #653b5b: login == \"admin\""
+}'/>
+```
+
+In this example, all rows get a blue background, except admin rows which get `#653b5b`.
+
+### Using string comparisons
+
+Enclose string literals in escaped single quotes when the outer attribute uses double quotes.
+
+```xml
+<field name="name" options="{'fg_color': 'green: customer_state == \'success\''}" />
+```
+
+## Expression syntax reference
+
+<AccordionGroup>
+  <Accordion title="Supported expression features">
+    Expressions are evaluated by Odoo's `py.js` engine. You can use:
+
+    - Field names as variables (e.g., `active`, `state`, `amount_total`)
+    - Comparison operators: `==`, `!=`, `<`, `>`, `<=`, `>=`
+    - Boolean literals: `True`, `False`
+    - Logical operators: `and`, `or`, `not`
+    - String literals in single quotes: `state == 'done'`
+    - Arithmetic: `amount_total > 1000`
+    - `in` operator: `state in ['draft', 'confirm']`
+  </Accordion>
+  <Accordion title="Color value formats">
+    Any CSS color value is accepted:
+
+    - Named colors: `red`, `green`, `blue`, `white`, `orange`
+    - Hex codes: `#9e1635`, `#653b5b`
+    - RGB: `rgb(255, 0, 0)`
+    - Shorthand hex: `#f00`
+  </Accordion>
+</AccordionGroup>
+
+## Complete example
+
+The following example (from the module's demo data) extends the standard Users list view to highlight accounts that have never logged in, and marks the admin account with a distinct color.
+
+```xml
+<record id="view_users_tree" model="ir.ui.view">
+    <field name="model">res.users</field>
+    <field name="inherit_id" ref="base.view_users_tree"/>
+    <field name="arch" type="xml">
+        <!-- Highlight rows where the user has never logged in -->
+        <field name="login_date" position="attributes">
+            <attribute name="options">{
+                "bg_color": "#9e1635: login_date == False",
+                "fg_color": "white: login_date == False"
+            }</attribute>
+        </field>
+        <!-- Mark the admin account separately; blue is the default for all rows -->
+        <field name="name" position="attributes">
+            <attribute name="options">{
+                "bg_color": "blue; #653b5b: login == 'admin'",
+                "fg_color": "white"
+            }</attribute>
+        </field>
+    </field>
+</record>
+```
+
+<Note>
+  Options can be written in JSON format (double-quoted keys) or as Python-style dictionaries (single-quoted keys). When using Python-style, the string is evaluated with `py.eval()`. Both formats are supported.
+</Note>
+
+## Evaluation order
+
+When multiple semicolon-separated rules are defined, all rules are evaluated for each record. The **last** rule whose expression is `True` is used — not the first. This means you can define a catch-all default at the beginning and override it with more specific conditions later.
+
+```xml
+<!-- Default: orange. Override for high-priority and urgent records. -->
+<field name="priority" options='{
+    "bg_color": "orange: priority != \"0\"; red: priority == \"3\""
+}'/>
+```
+
+## Module details
+
+| Property | Value |
+|---|---|
+| Technical name | `web_tree_dynamic_colored_field` |
+| Version | 18.0.1.0.1 |
+| License | AGPL-3 |
+| Author | Camptocamp, Therp BV, OCA |
+| Depends on | `web` |

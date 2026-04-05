@@ -1,0 +1,213 @@
+---
+title: 'Web Widget Bokeh Chart'
+description: 'Embed interactive Bokeh visualizations directly in Odoo form and list views using a computed field widget.'
+---
+
+The `web_widget_bokeh_chart` addon lets you embed [Bokeh](https://bokeh.pydata.org) interactive charts in any Odoo view. Bokeh is a Python visualization library that renders to modern web browsers via JavaScript, supporting rich interactivity (zoom, pan, hover tooltips, linked selections) over large or streaming datasets without requiring a separate BI tool.
+
+## Installation
+
+```python
+"depends": ["web", "web_widget_bokeh_chart"],
+```
+
+Install the Python Bokeh library in your Odoo server environment:
+
+```bash
+pip install bokeh
+```
+
+The JavaScript Bokeh runtime (v3.6.3) is bundled with the addon and loaded automatically — no CDN dependency required.
+
+## Two widget variants
+
+The addon registers two field widgets depending on how you store the chart data:
+
+| Widget name | Field type | Storage format |
+|---|---|---|
+| `bokeh_chart` | `fields.Text` / `fields.Char` | JSON string `{"div": "...", "script": "..."}` |
+| `bokeh_chart_json` | `fields.Json` | Python dict `{"div": "...", "script": "..."}` |
+
+Use `fields.Json` (and `bokeh_chart_json`) when possible — it avoids the `json.dumps` / `json.loads` round-trip.
+
+## Setup: Text field variant (`bokeh_chart`)
+
+<Steps>
+  <Step title="Declare a computed Text field">
+
+```python
+from odoo import fields, models
+
+class MyModel(models.Model):
+    _name = "my.model"
+
+    bokeh_chart = fields.Text(
+        string="Bokeh Chart",
+        compute="_compute_bokeh_chart",
+    )
+```
+
+  </Step>
+  <Step title="Add imports at the top of your Python file">
+
+```python
+from bokeh.plotting import figure
+from bokeh.embed import components
+import json
+```
+
+  </Step>
+  <Step title="Implement the compute method">
+
+```python
+def _compute_bokeh_chart(self):
+    for rec in self:
+        # Build a Bokeh figure
+        p = figure(title="Sales over time", x_axis_label="Month", y_axis_label="Revenue")
+        p.line([1, 2, 3, 4, 5], [10, 25, 18, 40, 33], line_width=2)
+
+        # Serialize to HTML components
+        script, div = components(p, wrap_script=False)
+        rec.bokeh_chart = json.dumps({"div": div, "script": script})
+```
+
+  </Step>
+  <Step title="Add the field to your view">
+
+```xml
+<div>
+    <field name="bokeh_chart" widget="bokeh_chart" nolabel="1" />
+</div>
+```
+
+  </Step>
+</Steps>
+
+## Setup: Json field variant (`bokeh_chart_json`)
+
+<Steps>
+  <Step title="Declare a computed Json field">
+
+```python
+bokeh_chart = fields.Json(
+    string="Bokeh Chart",
+    compute="_compute_bokeh_chart",
+)
+```
+
+  </Step>
+  <Step title="Add imports">
+
+```python
+from bokeh.plotting import figure
+from bokeh.embed import components
+```
+
+  </Step>
+  <Step title="Implement the compute method">
+
+```python
+def _compute_bokeh_chart(self):
+    for rec in self:
+        p = figure(title="Revenue by category")
+        p.vbar(x=[1, 2, 3], top=[10, 20, 15], width=0.5)
+
+        script, div = components(p, wrap_script=False)
+        rec.bokeh_chart = {"div": div, "script": script}
+```
+
+  </Step>
+  <Step title="Add the field to your view">
+
+```xml
+<div>
+    <field name="bokeh_chart" widget="bokeh_chart_json" nolabel="1" />
+</div>
+```
+
+  </Step>
+</Steps>
+
+## How rendering works
+
+When the field is rendered, the widget:
+
+1. Reads the stored `div` markup and injects it into the DOM.
+2. Creates a `<script>` tag from the `script` value and appends it — this bootstraps the Bokeh JavaScript that draws the chart into the `div`.
+3. Re-runs steps 1–2 on every `onPatched` lifecycle hook so charts stay current when the record changes.
+
+The Bokeh JS libraries are loaded asynchronously via `onWillStart` before the component mounts.
+
+## Complete example: bar chart on a sale order
+
+```python
+from bokeh.plotting import figure
+from bokeh.embed import components
+from bokeh.models import ColumnDataSource
+from odoo import fields, models
+
+class SaleOrder(models.Model):
+    _inherit = "sale.order"
+
+    revenue_chart = fields.Json(
+        string="Revenue Chart",
+        compute="_compute_revenue_chart",
+    )
+
+    def _compute_revenue_chart(self):
+        for order in self:
+            products = order.order_line.mapped("product_id.name")
+            revenues = order.order_line.mapped("price_subtotal")
+
+            source = ColumnDataSource(data={"products": products, "revenues": revenues})
+            p = figure(
+                x_range=products,
+                height=300,
+                title="Revenue by product",
+                toolbar_location=None,
+                tools="",
+            )
+            p.vbar(x="products", top="revenues", width=0.8, source=source)
+            p.xgrid.grid_line_color = None
+            p.y_range.start = 0
+
+            script, div = components(p, wrap_script=False)
+            order.revenue_chart = {"div": div, "script": script}
+```
+
+```xml
+<record id="sale_order_form_bokeh" model="ir.ui.view">
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_form" />
+    <field name="arch" type="xml">
+        <notebook position="inside">
+            <page string="Revenue Chart">
+                <field name="revenue_chart" widget="bokeh_chart_json" nolabel="1" />
+            </page>
+        </notebook>
+    </field>
+</record>
+```
+
+## Bokeh capabilities
+
+Bokeh supports a wide range of chart types and interactive features. See the [Bokeh gallery](https://bokeh.pydata.org/en/latest/docs/gallery.html) for examples:
+
+<CardGroup cols={2}>
+  <Card title="Line & scatter plots" icon="chart-line">
+    Time series, trend lines, regression plots.
+  </Card>
+  <Card title="Bar & area charts" icon="chart-bar">
+    Grouped bars, stacked areas, histograms.
+  </Card>
+  <Card title="Interactive tools" icon="hand-pointer">
+    Zoom, pan, hover tooltips, box/lasso select.
+  </Card>
+  <Card title="Linked plots" icon="link">
+    Multiple charts sharing a selection or range.
+  </Card>
+</CardGroup>
+
+<Warning>
+  The `compute` method runs once per record and on every recompute trigger. For charts built from large datasets, add appropriate `store=True` caching or compute only when the view is active to avoid performance issues.
+</Warning>

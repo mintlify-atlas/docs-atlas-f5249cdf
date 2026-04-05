@@ -1,0 +1,177 @@
+---
+title: 'Web M2x Options'
+description: 'Fine-grained control over Many2one and Many2many tag field drop-down behavior: disable create entries, set search limits, enable color coding, and more.'
+---
+
+The `web_m2x_options` addon extends the standard `many2one` and `many2many_tags` field widgets with additional display and behavior options. These can be set per-field in the view XML, or as instance-wide defaults through system parameters.
+
+By default, if the current user lacks create permissions on the related model, the addon **automatically hides** the "Create…" and "Create and Edit…" entries — no configuration needed.
+
+## Installation
+
+```python
+"depends": ["web", "web_m2x_options"],
+```
+
+## Per-field options
+
+Set options using the standard `options` attribute on any `many2one` or `many2many` field:
+
+```xml
+<field
+    name="partner_id"
+    options="{
+        'no_quick_create': True,
+        'no_create_edit': True,
+        'limit': 10,
+        'search_more': True
+    }"
+/>
+```
+
+### Available options
+
+<AccordionGroup>
+  <Accordion title="Create / quick-create control">
+
+| Option | Type | Description |
+|---|---|---|
+| `no_quick_create` | boolean | Hide the **"Create…"** (quick-create) entry in the drop-down. |
+| `no_create_edit` | boolean | Hide the **"Create and Edit…"** entry in the drop-down. |
+
+Setting `no_quick_create: True` removes the inline text-entry that lets users create a record by typing its name. Setting `no_create_edit: True` removes the option that opens the full form dialog.
+
+To explicitly **re-enable** an entry that has been disabled at the instance level via system parameters, pass `no_quick_create: False` or `no_create_edit: False`.
+
+  </Accordion>
+
+  <Accordion title="Search behavior">
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `limit` | integer | `8` | Number of records shown in the autocomplete drop-down list. |
+| `search_more` | boolean | `False` | Force-show the **"Search more…"** button that opens the full search dialog. |
+| `no_open` | boolean | `False` | Hide the external-link icon that navigates to the selected record's form view. |
+
+  </Accordion>
+
+  <Accordion title="Color coding">
+
+Use `field_color` together with `colors` to visually differentiate records in the drop-down by a field value:
+
+| Option | Type | Description |
+|---|---|---|
+| `field_color` | string | Name of the field on the related model whose value drives the color. |
+| `colors` | dict | Mapping of `field_value → HTML color`. |
+
+```xml
+<field
+    name="partner_id"
+    options="{
+        'limit': 10,
+        'search_more': True,
+        'field_color': 'type',
+        'colors': {
+            'contact': 'green',
+            'invoice': 'red',
+            'delivery': 'blue'
+        }
+    }"
+/>
+```
+
+  </Accordion>
+</AccordionGroup>
+
+## Examples
+
+<Tabs>
+  <Tab title="Disable all create options">
+
+```xml
+<field
+    name="product_id"
+    options="{'no_quick_create': True, 'no_create_edit': True}"
+/>
+```
+
+  </Tab>
+  <Tab title="Wider drop-down with Search More">
+
+```xml
+<field
+    name="partner_id"
+    options="{'limit': 15, 'search_more': True}"
+/>
+```
+
+  </Tab>
+  <Tab title="Color-coded by partner type">
+
+```xml
+<field
+    name="partner_id"
+    options="{
+        'field_color': 'type',
+        'colors': {
+            'contact': 'green',
+            'invoice': 'red',
+            'delivery': 'blue'
+        }
+    }"
+/>
+```
+
+  </Tab>
+  <Tab title="Many2many tags with limit">
+
+```xml
+<field
+    name="tag_ids"
+    widget="many2many_tags"
+    options="{'no_create_edit': True, 'limit': 20}"
+/>
+```
+
+  </Tab>
+</Tabs>
+
+## Instance-wide system parameters
+
+You can configure defaults for the entire Odoo instance without touching individual view XML. Go to **Settings → Technical → Parameters → System Parameters** and add:
+
+| Parameter key | Type | Default | Description |
+|---|---|---|---|
+| `web_m2x_options.create` | boolean | user's create right | Whether "Create…" is shown on all many2one/many2many fields instance-wide. |
+| `web_m2x_options.create_edit` | boolean | user's create right | Whether "Create and Edit…" is shown instance-wide. |
+| `web_m2x_options.limit` | integer | `8` | Drop-down list size for all fields instance-wide. |
+| `web_m2x_options.search_more` | boolean | `False` | Always show "Search more…" instance-wide. |
+| `web_m2x_options.field_limit_entries` | integer | — | Maximum rows shown on all One2many fields instance-wide. |
+
+**Example system parameter values:**
+
+```
+web_m2x_options.create       = False
+web_m2x_options.create_edit  = False
+web_m2x_options.limit        = 10
+web_m2x_options.search_more  = True
+web_m2x_options.field_limit_entries = 5
+```
+
+### Precedence rules
+
+Field-level options **always override** the instance-wide system parameters. If the instance disables "Create…" globally but a specific field sets `no_quick_create: False`, that field will still show the create entry.
+
+<Info>
+  The system parameters are read at session startup and cached in `session.web_m2x_options`. Changes take effect after the next browser page reload.
+</Info>
+
+## Behavior when no options are set
+
+When neither field-level options nor system parameters are configured, the addon's default behavior is:
+
+- "Create…" is shown **only if** the current user has the create access right on the related model.
+- "Create and Edit…" follows the same access-right check.
+- All other Odoo defaults apply (limit 8, no search_more, etc.).
+
+This means installing the addon alone — without any configuration — already provides a meaningful improvement: users who cannot create records no longer see misleading create options in the drop-down.

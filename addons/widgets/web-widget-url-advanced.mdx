@@ -1,0 +1,132 @@
+---
+title: 'Web Widget URL Advanced'
+description: 'Extend the standard URL and CopyClipboardURL widgets to display a custom anchor text drawn from another record field or a static prefix.'
+---
+
+The `web_widget_url_advanced` addon extends Odoo's built-in `url` and `CopyClipboardURL` widgets with two additional attributes:
+
+- **`text_field`** — use another field's value as the visible link text instead of the raw URL.
+- **`prefix_name`** — prepend a protocol or scheme prefix to the URL (e.g. `skype:`, `tel:`).
+
+This avoids displaying long, unreadable URLs to users and enables deep-link schemes for third-party apps.
+
+## Installation
+
+```python
+"depends": ["web", "web_widget_url_advanced"],
+```
+
+## `text_field` — custom link text from a sibling field
+
+Pass the name of any field already present in the view to use its value as the anchor text:
+
+```xml
+<field name="website" widget="url" text_field="name" placeholder="e.g. www.odoo.com" />
+```
+
+If `name` contains `"Acme Corp"` and `website` contains `"https://acme.com"`, the rendered link reads **Acme Corp** and navigates to `https://acme.com`.
+
+### Many2one fields
+
+When `text_field` points to a Many2one field, the widget automatically uses `display_name` (the second element of the `[id, display_name]` tuple):
+
+```xml
+<!-- partner_id is a Many2one; its display_name is used as the link text -->
+<field name="website" widget="url" text_field="partner_id" />
+```
+
+### Resolution order
+
+The widget picks the link text using this priority:
+
+1. `text_field` value (if the field is present and non-empty)
+2. Static `text` attribute
+3. Raw URL value from the field itself
+
+## `prefix_name` — URL scheme prefix
+
+Prepend a string before the stored value to construct the final `href`. This is useful for non-HTTP link schemes:
+
+```xml
+<field name="skype_name" widget="url" prefix_name="skype" />
+```
+
+If `skype_name` is `"john.doe"`, the rendered href becomes `skype:john.doe`.
+
+## Using options dict
+
+Both attributes can also be declared inside the `options` dict:
+
+```xml
+<field name="skype_name" widget="url" options="{'prefix_name': 'skype'}" />
+<field name="website" widget="url" options="{'text_field': 'name'}" />
+```
+
+Inline attributes (`text_field="..."`) take precedence over `options` values when both are provided.
+
+## CopyClipboardURL support
+
+Both `text_field` and `prefix_name` work identically on the `CopyClipboardURL` widget:
+
+```xml
+<field name="share_url" widget="CopyClipboardURL" text_field="name" />
+```
+
+## Partner form example
+
+Replace the raw website URL in the partner form with a human-readable link:
+
+```xml
+<record id="res_partner_form_url" model="ir.ui.view">
+    <field name="model">res.partner</field>
+    <field name="inherit_id" ref="base.view_partner_form" />
+    <field name="arch" type="xml">
+        <field name="website" position="attributes">
+            <attribute name="widget">url</attribute>
+            <attribute name="text_field">name</attribute>
+        </field>
+    </field>
+</record>
+```
+
+**Before:** the field shows `https://www.odoo.com`
+
+**After:** the field shows **YourCompany** as a clickable hyperlink to `https://www.odoo.com`
+
+## Skype / deep-link example
+
+```xml
+<field name="skype_name" widget="url" prefix_name="skype" text_field="name" />
+```
+
+Renders as: **John Doe** → `skype:john.doe`
+
+## Combining both attributes
+
+`text_field` and `prefix_name` can be used together:
+
+```xml
+<field
+    name="phone"
+    widget="url"
+    prefix_name="tel"
+    text_field="partner_id"
+/>
+```
+
+This produces a `tel:` link (for click-to-call) labeled with the partner's display name.
+
+## Technical implementation
+
+The addon patches `UrlField`, `formUrlField`, and `copyClipboardURLField` using Odoo's `patch` utility. The patch:
+
+1. Adds `text_field` and `prefix_name` to the component's props.
+2. Overrides the `title` getter to resolve `text_field` before falling back to the raw URL.
+3. Overrides the `formattedHrefWithPrefix` getter to prepend `prefix_name + ":"` to the href.
+4. Overrides `extractProps` to read both attributes from `attrs` and `options`.
+
+No new widget registration is needed — the same `widget="url"` declaration gains the new capabilities automatically.
+
+<Info>
+  The addon was previously split across two separate modules (`web_widget_url_advanced` and `web_widget_prefixed_url`). Since Odoo 14.0 both features are unified in this single addon.
+</Info>

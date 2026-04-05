@@ -1,0 +1,135 @@
+---
+title: "Web Responsive"
+description: "Responsive web client with fullscreen app menu, quick search, keyboard shortcuts, and mobile-optimised layout for Odoo Community Edition."
+---
+
+`web_responsive` brings a fully responsive backend to Odoo CE. It reworks navigation, adds fuzzy app search, improves list and form views across all screen sizes, and introduces keyboard shortcuts designed for one-hand use.
+
+<Note>
+  This module is mutually exclusive with `web_enterprise`. It will not install if the enterprise web client is present.
+</Note>
+
+## Features
+
+<CardGroup cols={2}>
+  <Card title="Fullscreen app menu" icon="grid-2x2">
+    Replaces the default home menu with a fullscreen overlay app launcher. Press the grid icon or use keyboard navigation to open and close it.
+  </Card>
+  <Card title="Quick app search" icon="search">
+    A search bar auto-focuses inside the app menu so you can start typing immediately. Supports canonical matching, fuzzy (Fuse.js) matching, and the command palette.
+  </Card>
+  <Card title="Keyboard shortcuts" icon="keyboard">
+    Uses `Alt + Shift + [NUM]` instead of plain `Alt + [NUM]` to avoid conflicts with browser tab switching. Includes `Alt + S` to save.
+  </Card>
+  <Card title="Sticky header & footer" icon="layout-panel-top">
+    List view column headers and action buttons stay visible while scrolling through long records.
+  </Card>
+  <Card title="Sticky status bar" icon="layout-panel-top">
+    The form view status bar remains fixed at the top while scrolling through long forms.
+  </Card>
+  <Card title="Mobile chatter" icon="message-circle">
+    Followers and the send button are shown on mobile devices. Avatars are hidden to save space. Control panel buttons switch to icon-only mode.
+  </Card>
+  <Card title="Side-by-side document viewer" icon="columns-2">
+    When the chatter occupies the side panel, the document viewer fills that panel for side-by-side reading instead of going fullscreen. A maximise button is available to expand to full width.
+  </Card>
+  <Card title="Chatter message colours" icon="palette">
+    Public messages and internal log notes use distinct composer colours so users can immediately see what type of message they are composing.
+  </Card>
+</CardGroup>
+
+## Installation
+
+Install the module using its technical name:
+
+```text
+web_responsive
+```
+
+**Dependencies:** `web`, `web_tour`, `mail`
+**License:** LGPL-3
+
+## Usage
+
+### App menu navigation
+
+<Steps>
+  <Step title="Open the app menu">
+    Click the grid icon in the top-left navbar or press `Home` to open the fullscreen app launcher.
+  </Step>
+  <Step title="Search for an app">
+    Start typing immediately — the search bar is auto-focused. Results update as you type using the configured search strategy.
+  </Step>
+  <Step title="Navigate results with the keyboard">
+    Use `Arrow keys` to move between results, `Enter` to open the highlighted app, and `Esc` to close the drawer.
+  </Step>
+</Steps>
+
+### Keyboard shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `Arrow keys` | Navigate app search results |
+| `Enter` | Open the selected app |
+| `Esc` | Close the app drawer |
+| `Alt + S` | Save the current record |
+| `Alt + Shift + [NUM]` | Activate numbered menu items |
+
+### Search strategy
+
+Each user can choose their preferred app search strategy from their profile preferences:
+
+| Strategy | Description |
+|---|---|
+| **Canonical** | Exact prefix/substring matching (default) |
+| **Fuse** | Fuzzy matching powered by Fuse.js — tolerates typos |
+| **Command Palette** | Opens the standard Odoo command palette |
+
+### Redirect to home
+
+By default, signing in opens the last visited app. To redirect to the app menu dashboard instead:
+
+<Steps>
+  <Step title="Open your user profile">
+    Click your avatar in the top-right corner and select **My Profile**.
+  </Step>
+  <Step title="Enable the option">
+    Enable the **Redirect to Home** toggle in your preferences and save.
+  </Step>
+</Steps>
+
+<Note>
+  The **Redirect to Home** option is automatically disabled if you have a default home action configured on your user record.
+</Note>
+
+### App menu theme
+
+Users can select between two visual themes for the app menu in their profile settings:
+
+- **Milk** (default) — light, minimal style
+- **Community** — OCA community-branded style
+
+## Components
+
+The following OWL components are registered by this module:
+
+| Component | Purpose |
+|---|---|
+| `AppsMenu` | Fullscreen app launcher overlay |
+| `AppMenuItem` | Individual app icon tile |
+| `AppsMenuSearchBar` | Wrapper that selects the active search bar strategy |
+| `MenuCanonicalSearchBar` | Canonical prefix search implementation |
+| `MenuFuseSearchBar` | Fuse.js fuzzy search implementation |
+| `MenuOdooSearchBar` | Odoo built-in search bar integration |
+| `HotkeyHandler` | Keyboard shortcut registration |
+| `FileViewer` | Side-panel document viewer with maximise button |
+| `ChatterPatch` | Mobile chatter layout and message colour logic |
+| `ControlPanelPatch` | Icon-only control panel buttons on small screens |
+| `CommandPalettePatch` | Command palette integration for app search |
+
+## Technical notes
+
+- **SCSS assets** are loaded in `web._assets_primary_variables` (form and primary variables) and `web.assets_backend` (layout, list sticky header, big checkboxes).
+- **Fuse.js** (`fuse.basic.min.js`) is bundled under `static/src/lib/fuse/` and used only when the Fuse search strategy is active.
+- The `res.users` model gains three fields: `apps_menu_search_type` (selection), `apps_menu_theme` (selection), and `is_redirect_home` (boolean computed from `action_id`).
+- The module sequence is set to `1` so its assets load early and are not overridden by other add-ons.
